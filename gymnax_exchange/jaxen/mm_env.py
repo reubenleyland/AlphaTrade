@@ -62,18 +62,13 @@ class EnvState:
     customIDcounter: int
     window_index:int
     init_price:int
-    task_to_execute:int
    #change for mm agent: we need to keep track of our inventory 
     inventory :int
     total_revenue:int
     step_counter: int
     max_steps_in_episode: int
     
-    slippage_rm: int
-    price_adv_rm: int
-    price_drift_rm: int
-    vwap_rm: int
-
+ 
 
 @struct.dataclass
 class EnvParams:
@@ -83,8 +78,6 @@ class EnvParams:
     obs_sell_list: chex.Array
     obs_buy_list: chex.Array
     episode_time: int =  60*30 #60seconds times 30 minutes = 1800seconds
-    # max_steps_in_episode: int = 100 # TODO should be a variable, decied by the data_window
-    # messages_per_step: int=1 # TODO never used, should be removed?
     time_per_step: int= 0##Going forward, assume that 0 implies not to use time step?
     time_delay_obs_act: chex.Array = jnp.array([0, 0]) #0ns time delay.
     avg_twap_list=jnp.array([312747.47,
@@ -108,8 +101,6 @@ class ExecutionEnv(BaseLOBEnv):
         super().__init__(alphatradePath)
         self.n_actions = 6 # [BB,BA,IB,OB,IA,OA] Best{bid/ask}, Inside{ bid/ask} Outside{ bid/ask}
         self.window_index =window_index
-        #Below are left over exec env params
-       # self.task = task# NO TASK=> JUST MM
         self.rewardLambda = rewardLambda
         self.n_fragment_max=2
         self.n_ticks_in_book=2 #TODO: Used to be 20, too large for stocks with dense LOBs
@@ -130,31 +121,9 @@ class ExecutionEnv(BaseLOBEnv):
 
         #Reshape action function=> use to shape the function.
         def reshape_action(action : Dict, state: EnvState, params : EnvParams):
-            action_space_clipping = lambda action,task_size: jnp.round((action-0.5)*task_size).astype(jnp.int32) if self.action_type=='delta' else jnp.round(action*task_size).astype(jnp.int32).clip(0,task_size)# clippedAction 
-            def twapV3(state, env_params):
-                # ---------- ifMarketOrder ----------
-                remainingTime = env_params.episode_time - jnp.array((state.time-state.init_time)[0], dtype=jnp.int32)
-                marketOrderTime = jnp.array(60, dtype=jnp.int32) # in seconds, means the last minute was left for market order
-                ifMarketOrder = (remainingTime <= marketOrderTime)
-                # print(f"{i} remainingTime{remainingTime} marketOrderTime{marketOrderTime}")
-                # ---------- ifMarketOrder ----------
-                # ---------- quants ----------
-                remainedQuant = state.task_to_execute - state.quant_executed
-                remainedStep = state.max_steps_in_episode - state.step_counter
-                stepQuant = jnp.ceil(remainedQuant/remainedStep).astype(jnp.int32) # for limit orders
-                limit_quants = jax.random.permutation(key, jnp.array([stepQuant-stepQuant//2,stepQuant//2]), independent=True)
-                market_quants = jnp.array([stepQuant,stepQuant])
-                quants = jnp.where(ifMarketOrder,market_quants,limit_quants)
-                # ---------- quants ----------
-                return jnp.array(quants) 
-            get_base_action = lambda state, params:twapV3(state, params)
-            def truncate_action(action, remainQuant):
-                action = jnp.round(action).astype(jnp.int32).clip(0,self.task_size)
-                scaledAction = jnp.where(action.sum() > remainQuant, (action * remainQuant / action.sum()).astype(jnp.int32), action)
-                return scaledAction
-            
-            action_ = get_base_action(state, params)  + action_space_clipping(delta,state.task_to_execute)  if self.action_type=='delta' else action_space_clipping(delta,state.task_to_execute)
-            action = truncate_action(action_, state.task_to_execute-state.quant_executed)
+           # action_space_clipping = lambda action,task_size: jnp.round((action-0.5)*task_size).astype(jnp.int32) if self.action_type=='delta' else jnp.round(action*task_size).astype(jnp.int32).clip(0,task_size)# clippedAction         
+            #action_ = get_base_action(state, params)  + action_space_clipping(delta,state.task_to_execute)  if self.action_type=='delta' else action_space_clipping(delta,state.task_to_execute)
+            #action = truncate_action(action_, state.task_to_execute-state.quant_executed)
             # jax.debug.print("base_ {}, delta_ {}, action_ {}; action {}",base_, delta_,action_,action)
             return action
         action = reshape_action(delta, state, params)
@@ -187,24 +156,24 @@ class ExecutionEnv(BaseLOBEnv):
         #Gather the 'trades' that are nonempty, make the rest 0
         executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
         #Mask to keep only the trades where the RL agent is involved, apply mask.
-        mask2 = ((-9000 < executed[:, 2]) & (executed[:, 2] < 0)) | ((-9000 < executed[:, 3]) & (executed[:, 3] < 0))
+        mask2 = ((-9000 < executed[:, 2]) & (executed[:, 2] < 0)) | ((-9000 < executed[:, 3]) & (executed[:, 3] < 0)) # How does this work? what is part 3?
         agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
         #----Got our list of trades by this agent now----#
         #--We want to do our abs(price our our trades- mid price)*quanitity traded/2 to get the spread pnl
         
-        new_execution = agentTrades[:,1].sum()
-        revenue = (agentTrades[:,0]//self.tick_size * agentTrades[:,1]).sum()
-        agentQuant = agentTrades[:,1].sum()
+      
+        agentQuant = agentTrades[:,1].sum() #Quanitity bought and sold in step => need to cancel buy and sells from one another here
 
         # Update inventory based on executed trades
         new_inventory = state.inventory + agentQuant  # Update with quantity bought/sold
 
-        # Calculate Inventory PnL #TODO MAKE THIS ACTUALY THE MID PRICE#
-        inventory_pnl = new_inventory * (current_mid_price - state.init_price)
+        # Calculate Inventory PnL #TODO MAKE THIS ACTUALY THE MID PRICE# This is most likely wrong!!
+        inventory_pnl = new_inventory * ((bestasks[:,-1]-bestbids[:,-1])/2 - state.init_price)
 
 
         #SPREAD PNL; nice and simple
         # Spread PnL component
+        mid_price[-1] = (best_bid + best_ask) / 2
         spread_pnl = jnp.abs(agentTrades[:, 0] - mid_price) * agentTrades[:, 1] / 2
 
         # Inventory PnL component=>> Is this giving per step or total??
@@ -214,11 +183,13 @@ class ExecutionEnv(BaseLOBEnv):
         # Combine to get total reward
         reward = spread_pnl.sum() + inventory_pnl_component
 
+        #Do revenue. Revenue is just the undamped sum of reward?
+
         
         # ---------- noramlize the reward ---------- 
         ##TODO DO I NEED TO DO THIS? TEST IT.##
         reward /= 10000
-        # reward /= params.avg_twap_list[state.window_index]
+      
         # ========== get reward and revenue END ==========
         
         #Update state (ask,bid,trades,init_time,current_time,OrderID counter,window index for ep, step counter,init_price,trades to exec, trades executed)
@@ -240,8 +211,8 @@ class ExecutionEnv(BaseLOBEnv):
         
         ##UPDATE THE STATE=> should be simple, lots of these shouldnt be here though ##
         state = EnvState(asks,bids,trades,bestasks,bestbids,state.init_time,time,state.customIDcounter+self.n_actions,state.window_index,\
-            state.init_price,state.task_to_execute,state.quant_executed+new_execution,state.total_revenue+revenue,state.step_counter+1,\
-            state.max_steps_in_episode,slippage_rm,price_adv_rm,price_drift_rm,vwap_rm)
+            state.init_price,state.inventory+agentQuant,state.total_revenue+revenue,state.step_counter+1,\
+            state.max_steps_in_episode)
             # state.max_steps_in_episode,state.twap_total_revenue+twapRevenue,state.twap_quant_arr)
         # jax.debug.breakpoint()
         done = self.is_terminal(state,params)
@@ -251,10 +222,9 @@ class ExecutionEnv(BaseLOBEnv):
             "average_price":state.total_revenue/state.quant_executed,\
             "current_step":state.step_counter,\
             'done':done,
-            'slippage_rm':state.slippage_rm,"price_adv_rm":state.price_adv_rm,
-            "price_drift_rm":state.price_drift_rm,"vwap_rm":state.vwap_rm,\
-            "advantage_reward":advantage,\
             }
+    # alot of the above needs changing also
+
 
 
     def reset_env(
@@ -296,12 +266,12 @@ class ExecutionEnv(BaseLOBEnv):
         return obs,state
 
 
-    #Remove the, 'have I executed it all' question part of this.#
+
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """Check whether state is terminal."""
-        return ((state.time-state.init_time)[0]>params.episode_time) | (state.task_to_execute-state.quant_executed<=0)
+        return ((state.time-state.init_time)[0]>params.episode_time)
     
-    def getActionMsgs(self, action: Dict, state: EnvState, params: EnvParams):
+    def getActionMsgs(self, action: Dict, state: EnvState, params: EnvParams): #Mightve updated this correctly?
         # ============================== Get Action_msgs ==============================
         # --------------- 01 rest info for deciding action_msgs ---------------
         types=jnp.ones((self.n_actions,),jnp.int32)
@@ -321,29 +291,19 @@ class ExecutionEnv(BaseLOBEnv):
         IB= best_bid + self.tick_size ##inside bid, trade up one step here
         OB=best_bid - self.tick_size #Converse, trade down
         IO= best_bid- self.tick_size #Under cut sale
-        IO= best_bid+ self.tick_size  #defensive sale
-    
-        
-        MKT = 0 if self.task=='sell' else job.MAX_INT
+        OO= best_bid+ self.tick_size  #defensive sale
         # --------------- 02 info for deciding prices ---------------
 
         # --------------- 03 Limit/Market Order (prices/qtys) ---------------
         remainingTime = params.episode_time - jnp.array((state.time-state.init_time)[0], dtype=jnp.int32)
+        
         marketOrderTime = jnp.array(60, dtype=jnp.int32) # in seconds, means the last minute was left for market order
-        ifMarketOrder = (remainingTime <= marketOrderTime)
+       
         def normal_order_logic(state: EnvState, action: jnp.ndarray):
             quants = action.astype(jnp.int32) # from action space
-            prices = jnp.asarray((FT,M,NT,PP), jnp.int32)
+            prices = jnp.asarray((best_ask,best_bid,IB,OB,IO,OO), jnp.int32)
             return quants, prices
-        def market_order_logic(state: EnvState):
-            quant = state.task_to_execute - state.quant_executed
-            quants = jnp.asarray((quant,0,0,0),jnp.int32) 
-            prices = jnp.asarray((MKT, M,M,M),jnp.int32)
-            return quants, prices
-        market_quants, market_prices = market_order_logic(state)
-        normal_quants, normal_prices = normal_order_logic(state, action)
-        quants = jnp.where(ifMarketOrder, market_quants, normal_quants)
-        prices = jnp.where(ifMarketOrder, market_prices, normal_prices)
+        quants, prices = normal_order_logic(state, action)
         # --------------- 03 Limit/Market Order (prices/qtys) ---------------
         action_msgs=jnp.stack([types,sides,quants,prices,trader_ids,order_ids],axis=1)
         action_msgs=jnp.concatenate([action_msgs,times],axis=1)
@@ -452,7 +412,6 @@ if __name__ == "__main__":
         # ATFolder = "/homes/80/kang/AlphaTrade/testing"
     config = {
         "ATFOLDER": ATFolder,
-        "TASKSIDE": "sell",
         "TASK_SIZE": 500,
         "WINDOW_INDEX": 0,
         "ACTION_TYPE": "pure",
@@ -463,7 +422,7 @@ if __name__ == "__main__":
     rng, key_reset, key_policy, key_step = jax.random.split(rng, 4)
 
     # env=ExecutionEnv(ATFolder,"sell",1)
-    env= ExecutionEnv(config["ATFOLDER"],config["TASKSIDE"],config["WINDOW_INDEX"],config["ACTION_TYPE"],config["TASK_SIZE"],config["REWARD_LAMBDA"])
+    env= ExecutionEnv(config["ATFOLDER"],config["WINDOW_INDEX"],config["ACTION_TYPE"],config["TASK_SIZE"],config["REWARD_LAMBDA"])
     env_params=env.default_params
     # print(env_params.message_data.shape, env_params.book_data.shape)
 
@@ -477,6 +436,8 @@ if __name__ == "__main__":
     for i in range(1,100000):
         # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
+        #Put ppo in here
+
         # print("-"*20)
         key_policy, _ =  jax.random.split(key_policy, 2)
         # test_action=env.action_space().sample(key_policy)
