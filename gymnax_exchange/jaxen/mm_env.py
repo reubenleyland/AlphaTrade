@@ -97,7 +97,7 @@ class EnvParams:
 
 
 class ExecutionEnv(BaseLOBEnv):
-    def __init__(self,alphatradePath,task,window_index,action_type,task_size = 500, rewardLambda=0.0, Gamma=0.00):
+    def __init__(self,alphatradePath,task,window_index,action_type,task_size = 500, rewardLambda=0.0, inventory=0):
         super().__init__(alphatradePath)
         self.n_actions = 6 # [BB,BA,IB,OB,IA,OA] Best{bid/ask}, Inside{ bid/ask} Outside{ bid/ask}
         self.window_index =window_index
@@ -154,9 +154,16 @@ class ExecutionEnv(BaseLOBEnv):
 
 
         #Gather the 'trades' that are nonempty, make the rest 0
-        executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
+        #I.e., check it is a real trade by making sure price is pos; fake is set at -1
+        executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0) 
         #Mask to keep only the trades where the RL agent is involved, apply mask.
-        mask2 = ((-9000 < executed[:, 2]) & (executed[:, 2] < 0)) | ((-9000 < executed[:, 3]) & (executed[:, 3] < 0)) # How does this work? what is part 3?
+        # need to do this seperatly; find where we've sold and where we've bought
+
+        #If we are on the sell side:
+
+
+
+        mask2 = ((-9000 < executed[:, 2]) & (executed[:, 2] < 0)) | ((-9000 < executed[:, 3]) & (executed[:, 3] < 0)) # Reuben to self=> this means is the OID in the range we keep
         agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
         #----Got our list of trades by this agent now----#
         #--We want to do our abs(price our our trades- mid price)*quanitity traded/2 to get the spread pnl
@@ -164,9 +171,11 @@ class ExecutionEnv(BaseLOBEnv):
       
         agentQuant = agentTrades[:,1].sum() #Quanitity bought and sold in step => need to cancel buy and sells from one another here
 
+
         # Update inventory based on executed trades
         new_inventory = state.inventory + agentQuant  # Update with quantity bought/sold
 
+        
         # Calculate Inventory PnL #TODO MAKE THIS ACTUALY THE MID PRICE# This is most likely wrong!!
         inventory_pnl = new_inventory * ((bestasks[:,-1]-bestbids[:,-1])/2 - state.init_price)
 
@@ -318,6 +327,7 @@ class ExecutionEnv(BaseLOBEnv):
         best_asks=state.best_asks[:,0]
         best_bids =state.best_bids[:,0]
         mid_prices=(best_asks+best_bids)//2//self.tick_size*self.tick_size 
+        #What is going on here, do i need this??
         second_passives = best_asks+self.tick_size*self.n_ticks_in_book if self.task=='sell' else best_bids-self.tick_size*self.n_ticks_in_book
         spreads = best_asks - best_bids
         # -----------------------2--------------------------
@@ -327,8 +337,13 @@ class ExecutionEnv(BaseLOBEnv):
         initPrice = state.init_price
         priceDrift = mid_prices[-1] - state.init_price
         # -----------------------4--------------------------
+        ##Dont need these, but put below what we do need
         taskSize = state.task_to_execute
         executed_quant=state.quant_executed
+
+        #We need inventory
+        inventory=state.inventory
+
         # -----------------------5--------------------------
         shallowImbalance = state.best_asks[:,1]- state.best_bids[:,1]
         # ========= self.get_obs(state,params) =============
