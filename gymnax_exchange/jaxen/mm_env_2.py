@@ -147,6 +147,7 @@ class EnvState(BaseEnvState):
     inventory :int
     # Execution specific rewards. 
     total_revenue: float
+    mid_price:float
     #drift_return: float
     #advantage_return: float
     #slippage_rm: float#
@@ -219,12 +220,13 @@ class ExecutionEnv(BaseLOBEnv):
         action_prices = action_msgs[:, 3]
         # jax.debug.print('action_msgs\n {}', action_msgs)
 
-        #Change here so we do both
+        #Change here so we do both==> Don't need just use both state varibales.
         raw_order_side = jax.lax.cond(
             state.is_sell_task,
             lambda: state.ask_raw_orders,
             lambda: state.bid_raw_orders
         ) 
+        #Apply cnl_msg on both sides of the book.
         cnl_msgs = job.getCancelMsgs(
             raw_order_side,#change
             job.INITID + 1,
@@ -239,7 +241,7 @@ class ExecutionEnv(BaseLOBEnv):
         # Add to the top of the data messages
         total_messages = jnp.concatenate([cnl_msgs, action_msgs, data_messages], axis=0)
         # Save time of final message to add to state
-        time = total_messages[-1, -2:]
+        time = total_messages[-1, -2:]#indexiing in and getting an int
         # To only ever consider the trades from the last step simply replace state.trades with an array of -1s of the same size. 
         trades_reinit = (jnp.ones((self.nTradesLogged, 6)) * -1).astype(jnp.int32)
         # Process messages of step (action+data) through the orderbook
@@ -269,6 +271,7 @@ class ExecutionEnv(BaseLOBEnv):
         #Possibly we want this be to be agent buys and agent sells/=>Make a buy and sell id??
         agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
         #We have the executions, question of how we find which side they were etc
+        ##Buys and sells need to be found
         executions = self._get_executed_by_action(agent_trades, action, state)
         quant_executed_this_step = executions.sum()
         #dont need this anymore
@@ -296,6 +299,7 @@ class ExecutionEnv(BaseLOBEnv):
 
         # TODO: use the agent quant identification from the separate function _get_executed_by_level instead of _get_reward
         reward, extras = self._get_reward(state, params, trades)
+        #change this to inventory and then have info on the inventory left 
         quant_executed = state.quant_executed + extras["agentQuant"]
         # CAVE: uses seconds only (not ns)
         trade_duration_step = (agent_trades[:, 1] / state.task_to_execute * (agent_trades[:, -2] - state.init_time[0])).sum()
@@ -368,6 +372,7 @@ class ExecutionEnv(BaseLOBEnv):
         """ Reset the environment to init state (pre computed from data)."""
         key_, key = jax.random.split(key)
         _, state = super().reset_env(key, params)
+        #Below is about task setting; also do not need this.
         if self.task == 'random':
             direction = jax.random.randint(key_, minval=0, maxval=2, shape=())
         else:
@@ -384,18 +389,20 @@ class ExecutionEnv(BaseLOBEnv):
         obs = self._get_obs(state, params)
         return obs, state
     
+
+    #Only need to check time now;> we dont end early if we complete the sale here
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
         """ Check whether state is terminal. """
         if self.ep_type == 'fixed_time':
             # TODO: make the 5 sec a function of the step size
             return (
                 (params.episode_time - (state.time - state.init_time)[0] <= 5)  # time over (last 5 seconds)
-                |  (state.task_to_execute - state.quant_executed <= 0)  # task done
+                #|  (state.task_to_execute - state.quant_executed <= 0)  # task done==>not needed
             )
         elif self.ep_type == 'fixed_steps':
             return (
                 (state.max_steps_in_episode - state.step_counter <= 1)  # last step
-                |  (state.task_to_execute - state.quant_executed <= 0)  # task done
+               # |  (state.task_to_execute - state.quant_executed <= 0)  # task done ==> not
             )
         else:
             raise ValueError(f"Unknown episode type: {self.ep_type}")
@@ -703,7 +710,7 @@ class ExecutionEnv(BaseLOBEnv):
             #elif action.shape[0] == 1:
             #    return FT, MKT
         ##
-
+        
         # ============================== Get Action_msgs ==============================
         # --------------- 01 rest info for deciding action_msgs ---------------
         types = jnp.ones((self.n_actions,), jnp.int32)
@@ -723,7 +730,7 @@ class ExecutionEnv(BaseLOBEnv):
 
         order_ids = (jnp.ones((self.n_actions,), jnp.int32) *
                     (self.trader_unique_id + state.customIDcounter)) \
-                    + jnp.arange(0, self.n_actions) #Each message has a unique ID
+                    + jnp.arange(0, self.n_actions) #Each message has a unique ID, add 0 through 5
         times = jnp.resize(
             state.time + params.time_delay_obs_act,
             (self.n_actions, 2)
@@ -859,6 +866,8 @@ class ExecutionEnv(BaseLOBEnv):
         return (asks, bids, trades), (bestask, bestbid), id_counter, time, mkt_exec_quant, doom_quant
     
     ######========================GET REWARDS FUNCTIONS===============================================######
+##EDITED TO PUT IN THE MID PRICE FOR USE IN THE REWARD FUNCTION ###
+
     def _get_reward(self, state: EnvState, params: EnvParams, trades: chex.Array) -> jnp.int32:
         # ========== get reward and revenue ==========
         # Gather the 'trades' that are nonempty, make the rest 0
@@ -879,21 +888,54 @@ class ExecutionEnv(BaseLOBEnv):
         # jax.debug.print('agentTrades\n {}', agentTrades[:30])
         agentQuant = agentTrades[:,1].sum() # new_execution quants
         
-        # ---------- used for vwap, revenue ----------
-        # vwapFunc = lambda tr: jnp.nan_to_num(
-        #     (tr[:,0] // self.tick_size * tr[:,1]).sum() / (tr[:,1]).sum(),
-        #     state.init_price  # if no trades happened, use init price
-        # ) # caution: this value can be zero (executed[:,1]).sum()
-        # only use other traders' trades for value weighted price
-        # vwap = vwapFunc(otherTrades) # average_price of all other trades
+        #Haven't figured out how we can get agent buys and agent sells yet. But lets assume we have agentQuant\
+        #net change in inventory in this step: agentQuant
 
+        #Don't need much of the below: it's vwap stuff. We do need the mid price at each trade tho, to compare our price to mid price
         other_exec_quants = otherTrades[:, 1].sum()
         vwap = jax.lax.cond(
             other_exec_quants == 0,
             lambda: state.init_price / self.tick_size,
             lambda: (otherTrades[:, 0] // self.tick_size * otherTrades[:, 1]).sum() / other_exec_quants
         )
-        
+        #There is some design here; should I do the mid price over the step; or the average trade price during the step
+        #make a function for average mid price to use in the reward. Check if this is inbuilt in the state
+        def mid(best_bids: jnp.ndarray, best_asks: jnp.ndarray) -> float:
+            # Compute the mid-price for each bid-ask pair
+            mid_prices = (best_bids + best_asks) / 2
+    
+              # Return the average mid-price across all pairs
+            average_mid_price = jnp.mean(mid_prices)
+            return average_mid_price
+        ### TRACK MIDPRICE AS A FN OF STATE (state.previous_mid_price)
+        mid_price=mid(state.best_bids,state.best_asks)
+        delta_mid_price = mid_price - state.previous_mid_price
+
+        #Them update the state with the new mid price after this step?
+          
+
+         # Step 4: Calculate Psi_a and Psi_b=> how much have we traded each way
+         #matched_ask and #matched_bid need to come from the calcs above but we have that bottle neck here.
+        psi_a = matched_ask_volume * (matched_ask_price - mid_price)
+        psi_b = matched_bid_volume * (mid_price - matched_bid_price)
+
+        # Step 5: Calculate Ψ(t_i) - Incremental PnL
+        incremental_pnl = psi_a + psi_b 
+
+         # Step 6: Apply dampening if specified #TYPES OF DAMPENING CAN BE CHOOSEN
+        if state.dampening_type == "symmetric":
+            reward = incremental_pnl - state.lamda * state.inventory * delta_mid_price
+        elif state.dampening_type == "asymmetric":
+            reward = incremental_pnl - max(0, state.lamda* state.inventory * delta_mid_price)
+        else:
+            reward = incremental_pnl  # Default PnL without dampening
+
+        #revenue is the undamped 'pure profit'
+        revenue=incremental_pnl = psi_a + psi_b + state.inventory * delta_mid_price
+        return reward, revenue
+
+        #Probably want to put some stuff back onto the state after this.
+
         revenue = (agentTrades[:,0] // self.tick_size * agentTrades[:,1]).sum()
         
         # ---------- used for slippage, price_drift, and RM(rolling mean) ----------
@@ -951,6 +993,7 @@ class ExecutionEnv(BaseLOBEnv):
         ) -> chex.Array:
         """ Return observation from raw state trafo. """
         # NOTE: only uses most recent observation from state
+        #Need to change this so we have both/ dont need it at all??
         quote_aggr, quote_pass = jax.lax.cond(
             state.is_sell_task,
             lambda: (state.best_bids[-1], state.best_asks[-1]),
@@ -959,7 +1002,8 @@ class ExecutionEnv(BaseLOBEnv):
         time = state.time[0] + state.time[1]/1e9
         time_elapsed = time - (state.init_time[0] + state.init_time[1]/1e9)
         # print('prev_action_shape', state.prev_action.shape)
-        sign_switch = 2 * state.is_sell_task - 1
+        sign_switch = 2 * state.is_sell_task - 1  #Do we need this?
+        #Lots of the observations are not needed
         obs = {
             "is_sell_task": state.is_sell_task,
             "p_aggr": quote_aggr[0] * sign_switch,  # switch sign for buy task
@@ -1056,6 +1100,7 @@ class ExecutionEnv(BaseLOBEnv):
         
         obs = {
             "is_sell_task": state.is_sell_task,
+            #Dont need lots of these
             "p_aggr": jnp.where(state.is_sell_task, best_bids, best_asks),
             "q_aggr": jnp.where(state.is_sell_task, best_bid_qtys, best_ask_qtys), 
             "p_pass": jnp.where(state.is_sell_task, best_asks, best_bids),
@@ -1067,8 +1112,15 @@ class ExecutionEnv(BaseLOBEnv):
             "time": state.time,
             "episode_time": state.time - state.init_time,
             "init_price": state.init_price,
-            "task_size": state.task_to_execute,
-            "executed_quant": state.quant_executed,
+            ##Want to add a mid price, and inventory
+            "inventory":state.inventory
+            #Does the mid price need to be in the observation space??
+            "mid_price":state.mid_price,
+
+
+
+            #"task_size": state.task_to_execute,
+            #"executed_quant": state.quant_executed,
             "step_counter": state.step_counter,
             "max_steps": state.max_steps_in_episode,
         }
