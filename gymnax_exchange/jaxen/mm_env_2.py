@@ -407,15 +407,10 @@ class ExecutionEnv(BaseLOBEnv):
         else:
             raise ValueError(f"Unknown episode type: {self.ep_type}")
 
-    # def _get_pass_price_quant(self, orders, best_ask_p, best_bid_p, is_sell_task):
-    #     price_passive_2 = jax.lax.cond(
-    #         is_sell_task,
-    #         lambda: best_ask_p + self.tick_size*self.n_ticks_in_book,
-    #         lambda: best_bid_p - self.tick_size*self.n_ticks_in_book
-    #     )
-    #     # quantity at second passive price level in the book
-    #     quant_passive_2 = job.get_volume_at_price(orders, price_passive_2)
-    #     return price_passive_2, quant_passive_2
+    
+    
+
+    
     
     def _get_pass_price_quant(self, state):
         price_passive_2 = jax.lax.cond(
