@@ -323,7 +323,8 @@ class ExecutionEnv(BaseLOBEnv):
             max_steps_in_episode = state.max_steps_in_episode,
             start_index = state.start_index,
             best_asks = bestasks,
-            best_bids = bestbids,
+            best_bids = bestbids,mTWbY8Ri1uh!2£y3X
+
             init_price = state.init_price,
             task_to_execute = state.task_to_execute,
             quant_executed = quant_executed,
