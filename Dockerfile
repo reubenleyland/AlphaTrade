@@ -10,9 +10,13 @@ RUN apt-get update && apt-get install -y p7zip-full
 RUN apt-get update && apt-get install -y unrar
 RUN apt-get update && apt-get install -y htop
 ARG UID
+
 RUN useradd -u $UID --create-home duser && \
-    echo "duser:duser" | chpasswd && \
-    adduser duser sudo
+   echo "duser:duser" | chpasswd && \
+   adduser duser sudo && \
+   mkdir -p /home/duser/.local/bin && \
+   chown -R duser:duser /home/duser
+
 USER duser
 WORKDIR /home/duser/
 RUN git config --global user.email "reuben@robots.ox.ac.uk"

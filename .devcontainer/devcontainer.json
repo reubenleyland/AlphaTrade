@@ -2,7 +2,7 @@
     "name": "Python Container",
     "context": "..",
     "dockerFile": "../Dockerfile",
-    "workspaceFolder": "/homes/80/reuben/AlphaTrade",  // Updated path
+    "workspaceFolder": "/homes/80/reuben/AlphaTrade",
     "postCreateCommand": "pip install -r /homes/80/reuben/AlphaTrade/docs/requirements.txt || true",
     "settings": {
         "python.pythonPath": "/usr/local/bin/python"
