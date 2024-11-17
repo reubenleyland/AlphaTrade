@@ -165,6 +165,7 @@ def get_random_large_id_match(cfg:Configuration,key:chex.PRNGKey,orderside, msg)
 ################ MATCHING FUNCTIONS ################
 
 
+## Lots of the below will need editting based on the change here
 
 
 
@@ -184,8 +185,12 @@ def match_order(data_tuple):
                     price (Int): price of the incoming order
                     trade (Array): Dummy Array representing empty trade
                     agrOID (Int): Order ID of the incoming order
+                    
                     time (Int): Arrival time (s) of incoming order
                     time_ns (Int): Arrival time (ns) of incoming order
+
+                    #Need to put the traderID in here=> how do we extract the incoming id?
+
         
         Returns:
                 data_tuple (Tuple): Same as input tuple, but without
@@ -195,7 +200,7 @@ def match_order(data_tuple):
 
     """
     (top_order_idx, orderside, qtm, price,
-            trade, agrOID, time, time_ns) = data_tuple
+            trade, agrOID, time, time_ns, agrTID) = data_tuple
     newquant=jnp.maximum(0,orderside[top_order_idx,1]-qtm)
     qtm=qtm-orderside[top_order_idx,1]
     qtm=qtm.astype(jnp.int32)
@@ -206,10 +211,13 @@ def match_order(data_tuple):
                                 orderside[top_order_idx,2],
                                 [agrOID],
                                 [time],
-                                [time_ns]]).transpose())
+                                [time_ns],
+                                [agrTID]#Something here that gives that trade id of the incoming
+                                orderside[top_order_idx,3],#TIDs
+                                ]).transpose())
     orderside=_removeZeroNegQuant(orderside.at[top_order_idx,1].set(newquant))
     return (orderside.astype(jnp.int32), jnp.squeeze(qtm),
-             price, trade, agrOID, time, time_ns)
+             price, trade, agrOID, time, time_ns, agrTID)
 
 
 @partial(jax.jit, static_argnums=(0,))
@@ -792,16 +800,15 @@ def add_trade(trades, new_trade):
     return trades
     
 @jax.jit
-def create_trade(price, quant, agrOID, passOID, time, time_ns):
-    return jnp.array([price, quant, agrOID, passOID, time, time_ns], dtype=jnp.int32)
+def create_trade(price, quant, agrOID, passOID, time, time_ns,agrTID,pasTID):
+    return jnp.array([price, quant, agrOID, passOID, time, time_ns,agrTID,pasTID], dtype=jnp.int32)
 
 @jax.jit
 def get_agent_trades(trades, agent_id):
     # Gather the 'trades' that are nonempty, make the rest 0
     executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
     # Mask to keep only the trades where the RL agent is involved, apply mask.
-    mask2 = ((agent_id <= executed[:, 2]) & (executed[:, 2] < 0)) \
-          | ((agent_id <= executed[:, 3]) & (executed[:, 3] < 0))
+    mask2 = (agent_id == executed[:, 6])  | (agent_id == executed[:, 7]) #Mask to find trader ID
     agent_trades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
     return agent_trades
 
