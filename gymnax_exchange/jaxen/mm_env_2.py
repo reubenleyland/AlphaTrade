@@ -145,20 +145,9 @@ class EnvState(BaseEnvState):
     best_asks: chex.Array
     best_bids: chex.Array
     # Market Making Specific Rewards
-    init_price: int
+    mid_price: int
     inventory :int
     total_revenue: float
-    mid_price:float
-    # Execution specific rewards. 
-    
-    
-    #drift_return: float
-    #advantage_return: float
-    #slippage_rm: float#
-    #price_adv_rm: float#
-    #price_drift_rm: float#
-    #vwap_rm: float#
-    #is_sell_task: int#
     trade_duration: float
     #quant_passive_2: int#
     #price_passive_2: int#
@@ -166,7 +155,6 @@ class EnvState(BaseEnvState):
 
 @struct.dataclass
 class EnvParams(BaseEnvParams):
-
     reward_lambda: float = 1.0
 
 #=========================Set up the base enviroment===================================#
@@ -227,9 +215,8 @@ class MarketMakingEnv(BaseLOBEnv):
 
         #Get the book state on each side.
         raw_bids = state.bid_raw_orders
-        raw_asks=state.ask_raw_orders
+        raw_asks = state.ask_raw_orders
           
-        
         #Apply cnl_msg on both sides of the book.
         cnl_msgs = job.getCancelMsgs(
             raw_bids,
@@ -279,10 +266,7 @@ class MarketMakingEnv(BaseLOBEnv):
         agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
         executions = self._get_executed_by_action(agent_trades, action, state)
 
-        
-        #dont need this anymore
-       # quant_left = state.task_to_execute - (state.quant_executed + quant_executed_this_step)
-        
+
         # jax.debug.print('agent_trades\n {}', agent_trades[:30])
         # jax.debug.print('executions: {}', executions)
         # jax.debug.print(
@@ -305,9 +289,9 @@ class MarketMakingEnv(BaseLOBEnv):
 
         # TODO: use the agent quant identification from the separate function _get_executed_by_level instead of _get_reward
         reward, extras = self._get_reward(state, params, trades)
-        #change this to inventory and then have info on the inventory left 
-        new_inventory = state.invenotry + extras["inventory_delta"]
-        # CAVE: uses seconds only (not ns)
+        
+     
+        # CAVE: uses seconds only (not ns). Why are we multiplying by a quantity traded?
         trade_duration_step = (agent_trades[:, 1] / state.task_to_execute * (agent_trades[:, -2] - state.init_time[0])).sum()
         trade_duration = state.trade_duration + trade_duration_step
         # jax.debug.print('trade_duration_step: {}, trade_duration: {}', trade_duration_step, trade_duration)
@@ -331,9 +315,9 @@ class MarketMakingEnv(BaseLOBEnv):
             best_asks = bestasks,
             best_bids = bestbids,
             #Have a look at this
-            inventory=new_inventory
+            inventory=state.inventory + extras["inventory_delta"],#change this to inventory and then have info on the inventory left 
 
-            init_price = state.init_price,
+            mid_price= extras['mid_price'],
             #task_to_execute = state.task_to_execute,
             total_revenue = state.total_revenue + extras["revenue"],
             #drift_return = state.drift_return + extras["drift"],
@@ -425,9 +409,7 @@ class MarketMakingEnv(BaseLOBEnv):
         base_vals = jtu.tree_flatten(base_state)[0]
         best_ask, best_bid = job.get_best_bid_and_ask_inclQuants(base_state.ask_raw_orders,base_state.bid_raw_orders)
         M = (best_bid[0] + best_ask[0]) // 2 // self.tick_size * self.tick_size 
-        # if task is 'random', this will be randomly picked at env reset
-        is_sell_task = 0 if self.task == 'buy' else 1 # if self.task == 'random', set defualt as 0
-        # HERE...
+       
 
         return EnvState(
             *base_vals,
@@ -435,17 +417,17 @@ class MarketMakingEnv(BaseLOBEnv):
             prev_executed=jnp.zeros((self.n_actions, ), jnp.int32),
             best_asks=jnp.resize(best_ask,(self.stepLines,2)),
             best_bids=jnp.resize(best_bid,(self.stepLines,2)),
-            init_price=M,
-            task_to_execute=self.max_task_size,
-            quant_executed=0,
+            mid_price=M,
+            #task_to_execute=self.max_task_size,
+            #quant_executed=0,
             total_revenue=0.,
-            drift_return=0.,
-            advantage_return=0.,
-            slippage_rm=0.,
-            price_adv_rm=0.,
-            price_drift_rm=0.,
-            vwap_rm=0.,
-            is_sell_task=is_sell_task, # updated on reset
+            #drift_return=0.,
+            #advantage_return=0.,
+            #slippage_rm=0.,
+            #price_adv_rm=0.,
+            #price_drift_rm=0.,
+            #vwap_rm=0.,
+            #is_sell_task=is_sell_task, # updated on reset
             trade_duration=0.,
             # updated on reset:
             quant_passive_2=0,
@@ -805,9 +787,9 @@ class MarketMakingEnv(BaseLOBEnv):
         
         # ---------- used for advantage and drift ----------
         # switch sign for buy task
-        direction_switch = jnp.sign(state.is_sell_task * 2 - 1)
-        advantage = direction_switch * (revenue - vwap * agentQuant) # advantage_vwap
-        drift = direction_switch * agentQuant * (vwap - state.init_price//self.tick_size)
+        #direction_switch = jnp.sign(state.is_sell_task * 2 - 1)
+        #advantage = direction_switch * (revenue - vwap * agentQuant) # advantage_vwap
+        #drift = direction_switch * agentQuant * (vwap - state.init_price//self.tick_size)
         
         # ---------- compute the final reward ----------
         # rewardValue = revenue 
@@ -838,6 +820,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
 
             "revenue": revenue ,
+            "mid_price":mid_price ,
             #"slippage_rm": slippage_rm,
             #"price_adv_rm": price_adv_rm,
             #"price_drift_rm": price_drift_rm,

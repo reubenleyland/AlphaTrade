@@ -10,7 +10,7 @@ Module containing all functions to manipulate the orderbook.
 To follow the functional programming paradigm of JAX, the functions of
  the orderbook are not put into an object but are left standalone.
 
-The functions exported are...
+The functions exported are..
 add_order: Adds an order to book side.
 cancel_order: Removes quantity from book side.
 match_order: Match incoming order against standing order.
@@ -171,6 +171,7 @@ def get_random_large_id_match(cfg:Configuration,key:chex.PRNGKey,orderside, msg)
 
 @jax.jit
 def match_order(data_tuple):
+    #In here is where I need to make standing buy Q>0 and standing sell Q<0
     """Matches an incoming order against the best order from a given
     side of the order book, and removes the matched quanitity from
     the book. Registers a trade for the size of the matched quantity.
@@ -180,6 +181,7 @@ def match_order(data_tuple):
         Parameters:
                 data_tuple (Tuple): 
                     top_order_idx (Int): location of best order in book
+                    side (Int): Tell us if incoming is bid(1) or ask(-1) 
                     orderside (Array): Array representing bid/ask side
                     qtm (Int): Quantity of incoming order unmatched
                     price (Int): price of the incoming order
@@ -188,10 +190,7 @@ def match_order(data_tuple):
                     
                     time (Int): Arrival time (s) of incoming order
                     time_ns (Int): Arrival time (ns) of incoming order
-                    agrTID (Int): TID for the incoming order, how to find??
-
-                    #Need to put the traderID in here=> how do we extract the incoming id?
-                    It is in the cinoming message?
+                    agrTID (Int): TID for the incoming order
 
         
         Returns:
@@ -201,7 +200,7 @@ def match_order(data_tuple):
                     trade. 
 
     """
-    (top_order_idx, orderside, qtm, price,
+    (top_order_idx,side, orderside, qtm, price,
             trade, agrOID, time, time_ns, agrTID) = data_tuple
     newquant=jnp.maximum(0,orderside[top_order_idx,1]-qtm)
     qtm=qtm-orderside[top_order_idx,1]
@@ -209,16 +208,16 @@ def match_order(data_tuple):
     emptyidx=jnp.where(trade==-1,size=1,fill_value=-1)[0]
     trade=trade.at[emptyidx,:] \
                 .set(jnp.array([orderside[top_order_idx,0],
-                                orderside[top_order_idx,1]-newquant,
+                                -side*(orderside[top_order_idx,1]-newquant),#q>0 if standing buys (incoming ask)
                                 orderside[top_order_idx,2],
                                 [agrOID],
                                 [time],
                                 [time_ns],
-                                [agrTID],#Something here that gives that trade id of the incoming: how to do?
+                                [agrTID],
                                 orderside[top_order_idx,3],#TIDs
                                 ]).transpose())
     orderside=_removeZeroNegQuant(orderside.at[top_order_idx,1].set(newquant))
-    return (orderside.astype(jnp.int32), jnp.squeeze(qtm),
+    return (orderside.astype(jnp.int32),side, jnp.squeeze(qtm),
              price, trade, agrOID, time, time_ns, agrTID)
 
 
@@ -284,7 +283,7 @@ def _check_before_matching_bid(data_tuple):
     return jnp.squeeze(returnarray)
 
 @partial(jax.jit,static_argnums=0)
-def _match_against_bid_orders(cfg:Configuration,orderside,qtm,price,trade,agrOID,time,time_ns,agrTID):
+def _match_against_bid_orders(cfg:Configuration,orderside,side,qtm,price,trade,agrOID,time,time_ns,agrTID):
     """Wrapper for the while loop that gets the top bid order, and
     matches the incoming order against it whilst the 
     _check_before_matching_bid function remains true.
@@ -293,10 +292,10 @@ def _match_against_bid_orders(cfg:Configuration,orderside,qtm,price,trade,agrOID
     """
     match_func=partial(_match_bid_order,cfg)
     top_order_idx=_get_top_bid_order_idx(cfg,orderside)
-    (top_order_idx,orderside,
+    (top_order_idx,orderside,side
      qtm,price,trade,_,_,_,_)=jax.lax.while_loop(_check_before_matching_bid,
                                                match_func,
-                                               (top_order_idx,orderside,
+                                               (top_order_idx,side,orderside,
                                                 qtm,price,trade,agrOID,
                                                 time,time_ns,agrTID))
     return (orderside,qtm,price,trade)
@@ -316,7 +315,7 @@ def _check_before_matching_ask(data_tuple):
     return jnp.squeeze(returnarray)
 
 @partial(jax.jit,static_argnums=0)
-def _match_against_ask_orders(cfg: Configuration,orderside,qtm,price,trade,agrOID,time,time_ns,agrTID):
+def _match_against_ask_orders(cfg: Configuration,orderside,side,qtm,price,trade,agrOID,time,time_ns,agrTID):
     """Wrapper for the while loop that gets the top ask order, and
     matches the incoming order against it whilst the 
     _check_before_matching_ask function remains true.
@@ -324,10 +323,10 @@ def _match_against_ask_orders(cfg: Configuration,orderside,qtm,price,trade,agrOI
     quantity to match.
     """
     top_order_idx=_get_top_ask_order_idx(cfg,orderside)
-    (top_order_idx,orderside,
+    (top_order_idx,orderside,side,
      qtm,price,trade,_,_,_,_)=jax.lax.while_loop(_check_before_matching_ask,
                                                partial(_match_ask_order,cfg),
-                                               (top_order_idx,orderside,
+                                               (top_order_idx,side,orderside,
                                                 qtm,price,trade,agrOID,
                                                 time,time_ns,agrTID))
     return (orderside,qtm,price,trade)
@@ -364,6 +363,7 @@ def bid_lim(cfg:Configuration,msg,askside,bidside,trades):
 
         Parameters:
                 msg (Dict): Incoming message to process.
+                    side (Int): 1 message is bid, -1 message is ask
                     quantity (Int): Quantity to buy/sell
                     price (Int): Price of order
                     orderid (Int): Unique ID in the book
@@ -380,7 +380,8 @@ def bid_lim(cfg:Configuration,msg,askside,bidside,trades):
                 trades (Array): Same as parameter, after processing
     """
     matchtuple=_match_against_ask_orders(cfg,
-                                         askside,msg["quantity"],
+                                         askside,msg['side'],
+                                         msg["quantity"],
                                          msg["price"],
                                          trades,
                                          msg['orderid'],
@@ -439,6 +440,7 @@ def ask_lim(cfg:Configuration,msg,askside,bidside,trades):
     """
     matchtuple=_match_against_bid_orders(cfg,
                                          bidside,
+                                         msg['side'],
                                          msg["quantity"],
                                          msg["price"],
                                          trades,
@@ -479,16 +481,16 @@ def match_top_order_if_pricematch(cfg:Configuration,side,msg,askside,bidside,tra
     if side==0:
         idx = _get_top_ask_order_idx(cfg,askside)
         best_order=askside[idx].squeeze()
-        match_tuple=(idx, askside, msg['quantity'], msg['price'],
+        match_tuple=(idx, askside,msg['side'], msg['quantity'], msg['price'],
             trades, msg['order_id'], msg['time'], msg['time_ns'],msg['agrTID'])
-        (top_order_idx,orderside,
+        (top_order_idx,side,orderside,
         qtm,price,trade,_,_,_,_)=_match_ask_order(cfg,match_tuple)
     if side==1:
         idx = _get_top_bid_order_idx(cfg,bidside)
         best_order=bidside[idx].squeeze()
-        match_tuple=(idx, askside, msg['quantity'], msg['price'],
+        match_tuple=(idx, askside,msg['side'], msg['quantity'], msg['price'],
             trades, msg['order_id'], msg['time'], msg['time_ns'],msg['agrTID'])
-        (top_order_idx,orderside,
+        (top_order_idx,side,orderside,
         qtm,price,trade,_,_,_,_)=_match_ask_order(cfg,match_tuple)
 
                                             
