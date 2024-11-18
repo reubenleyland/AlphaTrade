@@ -166,21 +166,22 @@ class EnvState(BaseEnvState):
 
 @struct.dataclass
 class EnvParams(BaseEnvParams):
-    #task_size: int=> dont need this? 
+
     reward_lambda: float = 1.0
 
+#=========================Set up the base enviroment===================================#
 class MarketMakingEnv(BaseLOBEnv):
     def __init__( #these need to change also
-            self, alphatradePath, task, window_index, action_type, episode_time,
+            self, alphatradePath, window_index, action_type, episode_time,
             max_task_size = 500, rewardLambda=1., ep_type="fixed_time"):
         
-        #Define Execution-specific attributes.
-        #self.task = task # "random", "buy", "sell"=> dont need this, just mm
-        #self.n_ticks_in_book = 2 # Depth of PP actions
+        #Define action specific attributes
+        self.n_ticks_in_book = 2 # Depth of PP actions
         self.action_type = action_type #'delta' or 'pure' 
         self.max_task_size = max_task_size
         self.rewardLambda = rewardLambda
         # TODO: fix!! this can be overwritten in the base class
+        #We had options for the numer of actions, in the old one, give that back here?
         self.n_actions = 6 # [BB,BA,IB,OB,IA,OA] Best{bid/ask}, Inside{ bid/ask} Outside{ bid/ask}
 
         #Call base-class init function
@@ -207,7 +208,7 @@ class MarketMakingEnv(BaseLOBEnv):
             reward_lambda=self.rewardLambda
         )
 
-
+#========================Step function=====================================================#
     def step_env(
         self, key: chex.PRNGKey, state: EnvState, input_action: jax.Array, params: EnvParams
     ) -> Tuple[chex.Array, EnvState, float, bool, dict]:
@@ -224,18 +225,23 @@ class MarketMakingEnv(BaseLOBEnv):
         action_prices = action_msgs[:, 3]
         # jax.debug.print('action_msgs\n {}', action_msgs)
 
-        #Change here so we do both==> Don't need just use both state varibales.
-        raw_order_side = jax.lax.cond(
-            state.is_sell_task,
-            lambda: state.ask_raw_orders,
-            lambda: state.bid_raw_orders
-        ) 
+        #Get the book state on each side.
+        raw_bids = state.bid_raw_orders
+        raw_asks=state.ask_raw_orders
+          
+        
         #Apply cnl_msg on both sides of the book.
         cnl_msgs = job.getCancelMsgs(
-            raw_order_side,#change
+            raw_bids,
             job.INITID + 1,
             self.n_actions,  # max number of orders to cancel
-            1 - state.is_sell_task * 2
+            -1#Bids side
+        )
+        cnl_msgs = job.getCancelMsgs(
+            raw_asks,
+            job.INITID + 1,
+            self.n_actions,  # max number of orders to cancel
+            1#Ask side
         )
         
         # net actions and cancellations at same price if new action is not bigger than cancellation
@@ -270,10 +276,7 @@ class MarketMakingEnv(BaseLOBEnv):
         )
         # jax.debug.print('agent_id {}, trades {}', self.trader_unique_id, trades)
         # filter to trades by our agent (rest are 0s)
-
         agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
-        #We have the executions, question of how we find which side they were etc
-       
         executions = self._get_executed_by_action(agent_trades, action, state)
 
         
@@ -303,7 +306,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # TODO: use the agent quant identification from the separate function _get_executed_by_level instead of _get_reward
         reward, extras = self._get_reward(state, params, trades)
         #change this to inventory and then have info on the inventory left 
-        new_inventory = state.invenotry + extras["inventory_change"]
+        new_inventory = state.invenotry + extras["inventory_delta"]
         # CAVE: uses seconds only (not ns)
         trade_duration_step = (agent_trades[:, 1] / state.task_to_execute * (agent_trades[:, -2] - state.init_time[0])).sum()
         trade_duration = state.trade_duration + trade_duration_step
@@ -319,8 +322,8 @@ class MarketMakingEnv(BaseLOBEnv):
             init_time = state.init_time,
             time = time,
             #time = new_time,
-            # customIDcounter = state.customIDcounter + self.n_actions + 1,
-            customIDcounter = new_id_counter,
+            customIDcounter = state.customIDcounter + self.n_actions + 1,
+            #customIDcounter = new_id_counter,
             window_index = state.window_index,
             step_counter = state.step_counter + 1,
             max_steps_in_episode = state.max_steps_in_episode,
@@ -331,7 +334,7 @@ class MarketMakingEnv(BaseLOBEnv):
             inventory=new_inventory
 
             init_price = state.init_price,
-            task_to_execute = state.task_to_execute,
+            #task_to_execute = state.task_to_execute,
             total_revenue = state.total_revenue + extras["revenue"],
             #drift_return = state.drift_return + extras["drift"],
             #advantage_return = state.advantage_return + extras["advantage"],
@@ -349,22 +352,22 @@ class MarketMakingEnv(BaseLOBEnv):
         info = {
             "window_index": state.window_index,
             "total_revenue": state.total_revenue,
-            "quant_executed": state.quant_executed,
-            "task_to_execute": state.task_to_execute,
-            "average_price": jnp.nan_to_num(state.total_revenue 
-                                            / state.quant_executed, 0.0),
+           # "quant_executed": state.quant_executed,
+           # "task_to_execute": state.task_to_execute,
+            #"average_price": jnp.nan_to_num(state.total_revenue 
+             #                               / state.quant_executed, 0.0),
             "current_step": state.step_counter,
             "done": done,
-            "slippage_rm": state.slippage_rm,
-            "price_adv_rm": state.price_adv_rm,
-            "price_drift_rm": state.price_drift_rm,
-            "vwap_rm": state.vwap_rm,
-            "advantage_reward": state.advantage_return,
-            "drift_reward": state.drift_return,
-            "trade_duration": state.trade_duration,
-            "mkt_forced_quant": mkt_exec_quant + doom_quant,
-            "doom_quant": doom_quant,
-            "is_sell_task": state.is_sell_task,
+            #"slippage_rm": state.slippage_rm,
+            #"price_adv_rm": state.price_adv_rm,
+            #"price_drift_rm": state.price_drift_rm,
+            #"vwap_rm": state.vwap_rm,
+            #"advantage_reward": state.advantage_return,
+            #"drift_reward": state.drift_return,
+            #"trade_duration": state.trade_duration,
+            #"mkt_forced_quant": mkt_exec_quant + doom_quant,
+            #"doom_quant": doom_quant,
+            #"is_sell_task": state.is_sell_task,
         }
         return self._get_obs(state, params), state, reward, done, info
     
@@ -377,19 +380,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """ Reset the environment to init state (pre computed from data)."""
         key_, key = jax.random.split(key)
         _, state = super().reset_env(key, params)
-        #Below is about task setting; also do not need this.
-        if self.task == 'random':
-            direction = jax.random.randint(key_, minval=0, maxval=2, shape=())
-        else:
-            direction = 0 if self.task == 'buy' else 1
-            
-        state = dataclasses.replace(state, is_sell_task=direction)
-
-        # update passive prices and quants depending on task direction
-        # (other features are independent)
-        # TODO: save passive prices and quants on both sides and handle this in _get_obs
-        price_passive_2, quant_passive_2 = self._get_pass_price_quant(state)
-        state = dataclasses.replace(state, price_passive_2=price_passive_2, quant_passive_2=quant_passive_2)
+        #I deleted some stuff here but it wasn't needed?
 
         obs = self._get_obs(state, params)
         return obs, state
@@ -411,12 +402,8 @@ class MarketMakingEnv(BaseLOBEnv):
             )
         else:
             raise ValueError(f"Unknown episode type: {self.ep_type}")
-
     
-    
-
-    
-    
+    #============passive price, used in the executoin enviroment obsveratoin space. Do i need this ?=======#
     def _get_pass_price_quant(self, state):
         price_passive_2 = jax.lax.cond(
             state.is_sell_task,
@@ -467,6 +454,8 @@ class MarketMakingEnv(BaseLOBEnv):
         )
 
     def _reshape_action(self, action : jax.Array, state: EnvState, params : EnvParams, key:chex.PRNGKey) -> jax.Array:
+        
+        #Look at this function, do I actually need this??
         def twapV3(state, env_params):
             # ---------- ifMarketOrder ----------
             remainingTime = env_params.episode_time - jnp.array((state.time-state.init_time)[0], dtype=jnp.int32)
@@ -475,7 +464,7 @@ class MarketMakingEnv(BaseLOBEnv):
             # print(f"{i} remainingTime{remainingTime} marketOrderTime{marketOrderTime}")
             # ---------- ifMarketOrder ----------
             # ---------- quants ----------
-            remainedQuant = state.task_to_execute - state.quant_executed
+            #remainedQuant = state.task_to_execute - state.quant_executed
             remainedStep = state.max_steps_in_episode - state.step_counter
             stepQuant = jnp.ceil(remainedQuant/remainedStep).astype(jnp.int32) # for limit orders
            # limit_quants = jax.random.permutation(key, jnp.array([stepQuant-stepQuant//2,stepQuant//2]), independent=True)
@@ -485,20 +474,12 @@ class MarketMakingEnv(BaseLOBEnv):
             # ---------- quants ----------
             return jnp.array(quants) 
 
-        def truncate_action(action, remainQuant):
-            action = jnp.round(action).clip(0, remainQuant).astype(jnp.int32)
-            # scaledAction = utils.clip_by_sum_int(action, remainQuant)
-            scaledAction = jnp.where(
-                action.sum() <= remainQuant,
-                action,
-                utils.hamilton_apportionment_permuted_jax(action, remainQuant, key)
-            ).astype(jnp.int32)
-            return scaledAction
+        
 
         if self.action_type == 'delta':
             action = twapV3(state, params) + action
 
-        action = truncate_action(action, state.task_to_execute - state.quant_executed)
+        #action = truncate_action(action, state.task_to_execute - state.quant_executed)
         # jax.debug.print("base_ {}, delta_ {}, action_ {}; action {}",base_, delta_,action_,action)
         # jax.debug.print("action {}", action)
         return action
@@ -631,11 +612,9 @@ class MarketMakingEnv(BaseLOBEnv):
             using previous actions. (0 actions are skipped)
             Aggressive quantities at FT and more passive are summed as the first quantity.
         """
-        best_price = jax.lax.cond(
-            state.is_sell_task,
-            lambda: state.best_bids[-1, 0],
-            lambda: state.best_asks[-1, 0]
-        )
+        best_bids = state.best_bids[-1, 0],
+        best_asks=state.best_asks[-1, 0]
+          
         #Below logic doesnt apply but can easily be fit to out set up.
         aggr_trades_mask = jax.lax.cond(
             state.is_sell_task,
@@ -674,6 +653,8 @@ class MarketMakingEnv(BaseLOBEnv):
         # return quants only (aggressive prices could be multiple)
         return price_quants[:, 1]
     
+
+    #===============Get messages for actions========================================#
     def _getActionMsgs(self, action: jax.Array, state: EnvState, params: EnvParams):
 
         def normal_quant_price(price_levels: jax.Array, action: jax.Array):
@@ -742,6 +723,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # --------------- 02 info for deciding prices ---------------
         best_ask, best_bid = state.best_asks[-1, 0], state.best_bids[-1, 0]
         #Change this to mm options
+        #############This is wrong!!!#####################
         price_levels = jnp.concatenate([bid_prices, ask_prices], axis=0)
         # --------------- 02 info for deciding prices ---------------
 
@@ -755,123 +737,11 @@ class MarketMakingEnv(BaseLOBEnv):
         return action_msgs
         # ============================== Get Action_msgs ==============================
 
-    ##========force market order-> I dont think I need this for MM =======##
-    def _force_market_order_if_done(
-            self,
-            quant_left: jax.Array,
-            bestask: jax.Array,
-            bestbid: jax.Array,
-            time: jax.Array,
-            asks: jax.Array,
-            bids: jax.Array,
-            trades: jax.Array,
-            state: EnvState,
-            params: EnvParams,
-        ) -> Tuple[Tuple[jax.Array, jax.Array, jax.Array], Tuple[jax.Array, jax.Array], int, int, int, int]:
-        """ Force a market order if episode is over (either in terms of time or steps). """
-        
-        def create_mkt_order():
-            mkt_p = (1 - state.is_sell_task) * job.MAX_INT // self.tick_size * self.tick_size
-            side = (1 - state.is_sell_task*2)
-            # TODO: this addition wouldn't work if the ns time at index 1 increases to more than 1 sec
-            new_time = time + params.time_delay_obs_act
-            mkt_msg = jnp.array([
-                # type, side, quant, price
-                1, side, quant_left, mkt_p,
-                self.trader_unique_id,
-                self.trader_unique_id + state.customIDcounter + self.n_actions,  # unique order ID for market order
-                *new_time,  # time of message
-            ])
-            next_id = state.customIDcounter + self.n_actions + 1
-            return mkt_msg, next_id, new_time
-
-        def create_dummy_order():
-            next_id = state.customIDcounter + self.n_actions
-            return jnp.zeros((8,), dtype=jnp.int32), next_id, time 
-        
-        def place_doom_trade(trades, price, quant, time):
-            doom_trade = job.create_trade(
-                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time)
-            # jax.debug.print('doom_trade\n {}', doom_trade)
-            trades = job.add_trade(trades, doom_trade)
-            return trades
-
-        if self.ep_type == 'fixed_time':
-            remainingTime = params.episode_time - jnp.array((time - state.init_time)[0], dtype=jnp.int32)
-            ep_is_over = remainingTime <= 5  # 5 seconds
-        else:
-            ep_is_over = state.max_steps_in_episode - state.step_counter <= 1
-
-        order_msg, id_counter, time = jax.lax.cond(
-            ep_is_over,
-            create_mkt_order,
-            create_dummy_order
-        )
-        # jax.debug.print('market order msg: {}', order_msg)
-        # jax.debug.print('remainingTime: {}, ep_is_over: {}, order_msg: {}, time: {}', remainingTime, ep_is_over, order_msg, time)
-
-        # jax.debug.print("trades before mkt\n {}", trades[:20])
-
-        (asks, bids, trades), (new_bestask, new_bestbid) = job.cond_type_side_save_bidask(
-            (asks, bids, trades),
-            order_msg
-        )
-        # jax.debug.print("trades after mkt\n {}", trades[:20])
-
-        # make sure best prices use the most recent available price and are not negative
-        bestask = jax.lax.cond(
-            new_bestask[0] <= 0,
-            lambda: jnp.array([bestask[0], 0]),
-            lambda: new_bestask,
-        )
-        bestbid = jax.lax.cond(
-            new_bestbid[0] <= 0,
-            lambda: jnp.array([bestbid[0], 0]),
-            lambda: new_bestbid,
-        )
-        # jax.debug.print('best_ask: {}; best_bid {}', bestask, bestbid)
-
-        # how much of the market order could be executed
-        mkt_exec_quant = jnp.where(
-            trades[:, 3] == order_msg[5],
-            trades[:, 1],  # executed quantity
-            0
-        ).sum()
-        # jax.debug.print('mkt_exec_quant: {}', mkt_exec_quant)
-        
-        # assume execution at really unfavorable price if market order doesn't execute (worst case)
-        # create artificial trades for this
-        quant_still_left = quant_left - mkt_exec_quant
-        # jax.debug.print('quant_still_left: {}', quant_still_left)
-        # assume doom price with 25% extra cost
-        doom_price = jax.lax.cond(
-            state.is_sell_task,
-            lambda: ((0.75 * bestbid[0]) // self.tick_size * self.tick_size).astype(jnp.int32),
-            lambda: ((1.25 * bestask[0]) // self.tick_size * self.tick_size).astype(jnp.int32),
-        )
-        # jax.debug.print('doom_price: {}', doom_price)
-        # jax.debug.print('best_ask: {}; best_bid {}', bestask, bestbid)
-        # jax.debug.print('ep_is_over: {}; quant_still_left: {}; remainingTime: {}', ep_is_over, quant_still_left, remainingTime)
-        trades = jax.lax.cond(
-            ep_is_over & (quant_still_left > 0),
-            place_doom_trade,
-            lambda trades, b, c, d: trades,
-            trades, doom_price, quant_still_left, time
-        )
-        # jax.debug.print('trades after doom\n {}', trades[:20])
-        # agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
-        # jax.debug.print('agent_trades\n {}', agent_trades[:20])
-        # price_quants = self._get_executed_by_price(agent_trades)
-        # jax.debug.print('price_quants\n {}', price_quants)
-        doom_quant = ep_is_over * quant_still_left
-
-        return (asks, bids, trades), (bestask, bestbid), id_counter, time, mkt_exec_quant, doom_quant
-    
     ######========================GET REWARDS FUNCTIONS===============================================######
 ##EDITED TO PUT IN THE MID PRICE FOR USE IN THE REWARD FUNCTION ###
 
     def _get_reward(self, state: EnvState, params: EnvParams, trades: chex.Array) -> jnp.int32:
-        # ========== get reward and revenue ==========
+        # ========== get reward and revenue ==========#
 
         # Gather the 'trades' that are nonempty, make the rest 0
         # Here this means we make any price >0 go away as this is a padding trade
@@ -891,7 +761,7 @@ class MarketMakingEnv(BaseLOBEnv):
         agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, executed)
 
         # jax.debug.print('agentTrades\n {}', agentTrades[:30])
-        agentQuant = agent_buys[:,1].sum()-agent_sells[:,1].sum() # new_execution quants
+        inventory_delta = agent_buys[:,1].sum()-agent_sells[:,1].sum() # new_execution quants
 
         #=============Calulcate the reward now=============#
         #Need some thinking, if I do mid price at each trade, could be a bit tricky, could do mid prce after each step?
@@ -901,25 +771,22 @@ class MarketMakingEnv(BaseLOBEnv):
         #Sketch:
         #This is a rough sktech, please look into this.
         #note I think this is the 'user the price at the end of the step' approach
-        best_ask, best_bid = job.get_best_bid_and_ask_inclQuants(state.ask_raw_orders,state.bid_raw_orders)
-        mid_price=(best_bid[0] + best_ask[0]) // 2 // self.tick_size * self.tick_size
+        best_ask, best_bid = job.get_best_bid_and_ask_inclQuants(state.ask_raw_orders,state.bid_raw_orders) #Returns best orders...
+        mid_price=(best_bid[0] + best_ask[0]) // 2 // self.tick_size * self.tick_size #so do 0
         spread_pnl= agent_buys[:,1]*[mid_price-agent_buys[:,0]].sum()+agent_sells[:,0]*[agent_sells[:,0]-mid_price].sum()
         delta_mid_price=state.mid_price-mid_price
         inventory_pnl=self.inventory*delta_mid_price
         revenue=spread_pnl+inventory_pnl
-        reward=spread_pnl+self.lamda*inventory_pnl.
+        #I can change the reward type here, could do clipped 0-1 etc
+        reward=spread_pnl+self.lamda*inventory_pnl
 
         traded_volume=agent_buys[:,1].sum()+agent_sells[:,1].sum()
-        market_share=##will be traded/total trade volume.
+        #market_share=
+        ##will be traded/total trade volume
 
 
         #I NEED TO MAKE SURE I AM NOT TRADING WITH MYSELF.
         
-
-
-
-
-
         #Don't need much of the below: it's vwap stuff. We do need the mid price at each trade tho, to compare our price to mid price
         other_exec_quants = otherTrades[:, 1].sum()
         vwap = jax.lax.cond(
@@ -928,13 +795,7 @@ class MarketMakingEnv(BaseLOBEnv):
             lambda: (otherTrades[:, 0] // self.tick_size * otherTrades[:, 1]).sum() / other_exec_quants
         )
         
-
-        
-
         #Probably want to put some stuff back onto the state after this.
-
-        revenue = (agentTrades[:,0] // self.tick_size * agentTrades[:,1]).sum()
-        
         # ---------- used for slippage, price_drift, and RM(rolling mean) ----------
         rollingMeanValueFunc_FLOAT = lambda average_val,new_val:(average_val*state.step_counter+new_val)/(state.step_counter+1)
         vwap_rm = rollingMeanValueFunc_FLOAT(state.vwap_rm,vwap) # (state.market_rap*state.step_counter+executedAveragePrice)/(state.step_counter+1)
@@ -971,14 +832,18 @@ class MarketMakingEnv(BaseLOBEnv):
         reward_scaled = reward / 100_000
         # reward /= params.avg_twap_list[state.window_index]
         return reward_scaled, {
-            "agentQuant": agentQuant,
-            "revenue": reward_lam1 / 100_000,  # pure revenue is not informative if direction is random (-> flip and normalise)
-            "slippage_rm": slippage_rm,
-            "price_adv_rm": price_adv_rm,
-            "price_drift_rm": price_drift_rm,
-            "vwap_rm": vwap_rm,
-            "advantage": advantage,
-            "drift": drift
+            "inventory_delta": inventory_delta,
+            #Return only stuff I need below here.
+            ##e.g. market share, total volume...
+
+
+            "revenue": revenue ,
+            #"slippage_rm": slippage_rm,
+            #"price_adv_rm": price_adv_rm,
+            #"price_drift_rm": price_drift_rm,
+            #"vwap_rm": vwap_rm,
+            #"advantage": advantage,
+            #"drift": drift
         }
         #RETURN IS REWARDS AND EXTRAS.
 
@@ -992,6 +857,11 @@ class MarketMakingEnv(BaseLOBEnv):
         """ Return observation from raw state trafo. """
         # NOTE: only uses most recent observation from state
         #Need to change this so we have both/ dont need it at all??
+
+        #We want both sides of the book also, but just call it best bid and best ask
+        best_bids=state.best_bids[-1]
+        best_asks=state.best_asks[-1]
+
         quote_aggr, quote_pass = jax.lax.cond(
             state.is_sell_task,
             lambda: (state.best_bids[-1], state.best_asks[-1]),
@@ -1000,17 +870,18 @@ class MarketMakingEnv(BaseLOBEnv):
         time = state.time[0] + state.time[1]/1e9
         time_elapsed = time - (state.init_time[0] + state.init_time[1]/1e9)
         # print('prev_action_shape', state.prev_action.shape)
-        sign_switch = 2 * state.is_sell_task - 1  #Do we need this?
+        #sign_switch = 2 * state.is_sell_task - 1  
         #Lots of the observations are not needed
         obs = {
-            "is_sell_task": state.is_sell_task,
-            #Obvservatoins here need to be the prices I can trade at and then similar items elsewhere
+            #"is_sell_task": state.is_sell_task,
+            #Obvservations here need to be the prices I can trade at and then similar items elsewhere
 
-            "p_aggr": quote_aggr[0] * sign_switch,  # switch sign for buy task
-            "p_pass": quote_pass[0] * sign_switch,  # switch sign for buy task
-            "spread": jnp.abs(quote_aggr[0] - quote_pass[0]),
-            "q_aggr": quote_aggr[1],
-            "q_pass": quote_pass[1],
+            "best_bids": best_bids[0] * sign_switch,  # switch sign for buy task
+            "best_asks": best_asks[0] * sign_switch,  # switch sign for buy task =. dont need that
+            "spread": jnp.abs(best_asks[0] - best_bids[0]),
+            "q_bb": best_bids[1],
+            "q_ba": best_asks[1],
+            #below also go?
             "q_pass2": state.quant_passive_2,
             # "q_before2": None, # how much quantity lies above this price level
             "time": time,
@@ -1018,13 +889,14 @@ class MarketMakingEnv(BaseLOBEnv):
             # "episode_time": state.time - state.init_time,
             "time_remaining": params.episode_time - time_elapsed,
             "init_price": state.init_price,
-            "task_size": state.task_to_execute,
-            "executed_quant": state.quant_executed,
-            "remaining_quant": state.task_to_execute - state.quant_executed,
+            "inventory": state.inventory,
+            #"task_size": state.task_to_execute,
+            #"executed_quant": state.quant_executed,
+            #"remaining_quant": state.task_to_execute - state.quant_executed,
             "step_counter": state.step_counter,
             "max_steps": state.max_steps_in_episode,
             # "remaining_ratio": 1. - jnp.nan_to_num(state.step_counter / state.max_steps_in_episode, nan=1.),
-            "remaining_ratio": jnp.where(state.max_steps_in_episode==0, 0., 1. - state.step_counter / state.max_steps_in_episode),
+           # "remaining_ratio": jnp.where(state.max_steps_in_episode==0, 0., 1. - state.step_counter / state.max_steps_in_episode),
             "prev_action": state.prev_action[:, 1],  # use quants only
             "prev_executed": state.prev_executed,  # use quants only
             "prev_executed_ratio": jnp.where(state.prev_action[:, 1]==0., 0., state.prev_executed / state.prev_action[:, 1]),
@@ -1114,8 +986,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "init_price": state.init_price,
             ##Want to add a mid price, and inventory
             "inventory":state.inventory
-            #Does the mid price need to be in the observation space??
-            "mid_price":state.mid_price,
+            
 
 
 
@@ -1228,7 +1099,7 @@ if __name__ == "__main__":
         # ATFolder = "/homes/80/kang/AlphaTrade/testing"
     config = {
         "ATFOLDER": ATFolder,
-        "TASKSIDE": "buy", # "random", # "buy",
+        #"TASKSIDE": "buy", # "random", # "buy",
         "MAX_TASK_SIZE": 100, # 500,
         "WINDOW_INDEX": 1,
         "ACTION_TYPE": "pure", # "pure",
@@ -1241,9 +1112,9 @@ if __name__ == "__main__":
     rng, key_reset, key_policy, key_step = jax.random.split(rng, 4)
 
     # env=ExecutionEnv(ATFolder,"sell",1)
-    env = ExecutionEnv(
+    env = MarketMakingEnv(
         alphatradePath=config["ATFOLDER"],
-        task=config["TASKSIDE"],
+        #task=config["TASKSIDE"],
         window_index=config["WINDOW_INDEX"],
         action_type=config["ACTION_TYPE"],
         episode_time=config["EPISODE_TIME"],
@@ -1293,6 +1164,7 @@ if __name__ == "__main__":
 
 
     # # ####### Testing the vmap abilities ########
+    #Ask what this is then delete it probably
     
     enable_vmap=False
     if enable_vmap:
