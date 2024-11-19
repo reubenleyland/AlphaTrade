@@ -314,20 +314,12 @@ class MarketMakingEnv(BaseLOBEnv):
             start_index = state.start_index,
             best_asks = bestasks,
             best_bids = bestbids,
-            #Have a look at this
+           
             inventory=state.inventory + extras["inventory_delta"],#change this to inventory and then have info on the inventory left 
 
             mid_price= extras['mid_price'],
-            #task_to_execute = state.task_to_execute,
             total_revenue = state.total_revenue + extras["revenue"],
-            #drift_return = state.drift_return + extras["drift"],
-            #advantage_return = state.advantage_return + extras["advantage"],
-            #slippage_rm = extras["slippage_rm"],
-            #price_adv_rm = extras["price_adv_rm"],
-            #price_drift_rm = extras["price_drift_rm"],
-            #vwap_rm = extras["vwap_rm"],
-            #is_sell_task = state.is_sell_task,
-            #trade_duration = trade_duration,
+            trade_duration = trade_duration,
             #price_passive_2 = price_passive_2,
             #quant_passive_2 = quant_passive_2,
             #delta_time = new_time[0] + new_time[1]/1e9 - state.time[0] - state.time[1]/1e9,
@@ -336,7 +328,7 @@ class MarketMakingEnv(BaseLOBEnv):
         info = {
             "window_index": state.window_index,
             "total_revenue": state.total_revenue,
-           # "quant_executed": state.quant_executed,
+            #"quant_executed": state.quant_executed,
            # "task_to_execute": state.task_to_execute,
             #"average_price": jnp.nan_to_num(state.total_revenue 
              #                               / state.quant_executed, 0.0),
@@ -365,8 +357,7 @@ class MarketMakingEnv(BaseLOBEnv):
         key_, key = jax.random.split(key)
         _, state = super().reset_env(key, params)
         #I deleted some stuff here but it wasn't needed?
-
-        obs = self._get_obs(state, params)
+        obs = self._get_obs(state, params)# we are using the base version of this function.
         return obs, state
     
 
@@ -402,7 +393,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # quantity at second passive price level in the book
         quant_passive_2 = job.get_volume_at_price(orders, price_passive_2)
         return price_passive_2, quant_passive_2
-    
+    #===========Get state from intialising data====================#####
     def _get_state_from_data(self,first_message,book_data,max_steps_in_episode,window_index,start_index):
         #(self,message_data,book_data,max_steps_in_episode)
         base_state = super()._get_state_from_data(first_message, book_data, max_steps_in_episode, window_index, start_index)
@@ -418,20 +409,11 @@ class MarketMakingEnv(BaseLOBEnv):
             best_asks=jnp.resize(best_ask,(self.stepLines,2)),
             best_bids=jnp.resize(best_bid,(self.stepLines,2)),
             mid_price=M,
-            #task_to_execute=self.max_task_size,
-            #quant_executed=0,
             total_revenue=0.,
-            #drift_return=0.,
-            #advantage_return=0.,
-            #slippage_rm=0.,
-            #price_adv_rm=0.,
-            #price_drift_rm=0.,
-            #vwap_rm=0.,
-            #is_sell_task=is_sell_task, # updated on reset
             trade_duration=0.,
             # updated on reset:
-            quant_passive_2=0,
-            price_passive_2=0,
+           # quant_passive_2=0,
+            #price_passive_2=0,
             delta_time=0.,
         )
 
@@ -566,7 +548,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """
         price_levels, r_idx = jnp.unique(
             agent_trades[:, 0], return_inverse=True, size=self.n_actions+1, fill_value=0)
-        quant_by_price = jax.ops.segment_sum(agent_trades[:, 1], r_idx, num_segments=self.n_actions+1)
+        quant_by_price = jax.ops.segment_sum(jnp.abs(agent_trades[:, 1]), r_idx, num_segments=self.n_actions+1)
         price_quants = jnp.vstack((price_levels[1:], quant_by_price[1:])).T
         # jax.debug.print("_get_executed_by_level\n {}", price_quants)
         return price_quants
@@ -743,7 +725,9 @@ class MarketMakingEnv(BaseLOBEnv):
         agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, executed)
 
         # jax.debug.print('agentTrades\n {}', agentTrades[:30])
-        inventory_delta = agent_buys[:,1].sum()-agent_sells[:,1].sum() # new_execution quants
+        # Positive Q = standing buys, negative Q = standing sells
+        inventory_delta = jnp.abs(agent_buys[:, 1]).sum() - jnp.abs(agent_sells[:, 1]).sum()
+
 
         #=============Calulcate the reward now=============#
         #Need some thinking, if I do mid price at each trade, could be a bit tricky, could do mid prce after each step?
@@ -844,12 +828,8 @@ class MarketMakingEnv(BaseLOBEnv):
         #We want both sides of the book also, but just call it best bid and best ask
         best_bids=state.best_bids[-1]
         best_asks=state.best_asks[-1]
+        mid_price=best_bids+best_asks/2 ##stuff about tick size etc etc
 
-        quote_aggr, quote_pass = jax.lax.cond(
-            state.is_sell_task,
-            lambda: (state.best_bids[-1], state.best_asks[-1]),
-            lambda: (state.best_asks[-1], state.best_bids[-1]),
-        )
         time = state.time[0] + state.time[1]/1e9
         time_elapsed = time - (state.init_time[0] + state.init_time[1]/1e9)
         # print('prev_action_shape', state.prev_action.shape)
@@ -861,6 +841,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
             "best_bids": best_bids[0] * sign_switch,  # switch sign for buy task
             "best_asks": best_asks[0] * sign_switch,  # switch sign for buy task =. dont need that
+            "mid_price":mid_price,
             "spread": jnp.abs(best_asks[0] - best_bids[0]),
             "q_bb": best_bids[1],
             "q_ba": best_asks[1],
@@ -890,6 +871,8 @@ class MarketMakingEnv(BaseLOBEnv):
         # TODO: put this into config somewhere?
         #       also check if we can get rid of manual normalization
         #       by e.g. functional transformations or maybe gymnax obs norm wrapper suffices?
+
+        #Below is a list of manual normaliszations for the observations
         p_mean = 3.5e7
         p_std = 1e6
         means = {
@@ -968,7 +951,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "episode_time": state.time - state.init_time,
             "init_price": state.init_price,
             ##Want to add a mid price, and inventory
-            "inventory":state.inventory
+            "inventory":state.inventory,
             
 
 
@@ -1019,6 +1002,7 @@ class MarketMakingEnv(BaseLOBEnv):
         obs = self.normalize_obs(obs, means, stds)
         obs, _ = jax.flatten_util.ravel_pytree(obs)
         return obs
+    #Also do the normalized version of the full observation
 
     def normalize_obs(
             self,
