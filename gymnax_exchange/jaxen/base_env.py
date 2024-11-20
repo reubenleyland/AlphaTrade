@@ -172,7 +172,7 @@ class BaseLOBEnv(environment.Environment):
         self.n_actions=2
         self.n_ticks_in_book = 2 # Depth of PP actions
         self.customIDCounter=0
-        self.trader_unique_id=job.INITID+1
+        self.trader_unique_id=10
         self.tick_size=100
         self.start_resolution=60 #Interval in seconds at which eps start
         loader=LoadLOBSTER_resample(alphatradePath,
@@ -269,7 +269,7 @@ class BaseLOBEnv(environment.Environment):
         #Initialise both sides of the book as being empty
         asks_raw=job.init_orderside(self.nOrdersPerSide)
         bids_raw=job.init_orderside(self.nOrdersPerSide)
-        trades_init=(jnp.ones((self.nTradesLogged,6))*-1).astype(jnp.int32)
+        trades_init=(jnp.ones((self.nTradesLogged,8))*-1).astype(jnp.int32)
         #Process the initial messages through the orderbook
         ordersides=job.scan_through_entire_array(init_orders,(asks_raw,bids_raw,trades_init))
         return EnvState(ask_raw_orders=ordersides[0],
@@ -383,7 +383,7 @@ class BaseLOBEnv(environment.Environment):
             {
                 "bids": spaces.Box(-1,999999999,shape=(6,self.nOrdersPerSide),dtype=jnp.int32),
                 "asks": spaces.Box(-1,999999999,shape=(6,self.nOrdersPerSide),dtype=jnp.int32),
-                "trades": spaces.Box(-1,999999999,shape=(6,self.nTradesLogged),dtype=jnp.int32),
+                "trades": spaces.Box(-1,999999999,shape=(8,self.nTradesLogged),dtype=jnp.int32),
                 "time": spaces.Discrete(params.max_steps_in_episode),
             }
         )
