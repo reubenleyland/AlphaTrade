@@ -41,7 +41,7 @@ from typing import Tuple, Optional
 import chex
 from flax import struct
 from gymnax_exchange.jaxes.jaxob_new import JaxOrderBookArrays as job
-from gymnax_exchange.jaxen.base_env_old import BaseLOBEnv
+from AlphaTrade.gymnax_exchange.jaxen.old.base_env_old import BaseLOBEnv
 
 from typing import Tuple, Union, Optional
 from functools import partial

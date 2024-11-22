@@ -19,7 +19,7 @@ RUN pip3 install distrax==0.1.5 gym==0.26.2 gymnax==0.0.6 mujoco==2.3.7 tensorfl
 # Update PATH for local binaries
 RUN echo 'export PATH=$PATH:/home/duser/.local/bin' >> ~/.bashrc
 
-# Login to wandb (if necessary)
+# Login to wandb => Change this to your own wandb login
 RUN wandb login 4660672e2c993e2d293d3153ca4ddc82f91a4736
 
 # Install utilities
