@@ -805,7 +805,7 @@ class ExecutionEnv(BaseLOBEnv):
 
         def create_dummy_order():
             next_id = state.customIDcounter + self.n_actions
-            return jnp.zeros((8,), dtype=jnp.int32), next_id, time 
+            return jnp.zeros((6,), dtype=jnp.int32), next_id, time 
         
         def place_doom_trade(trades, price, quant, time):
             doom_trade = job.create_trade(
