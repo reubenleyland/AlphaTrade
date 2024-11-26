@@ -242,7 +242,7 @@ class ExecutionEnv(BaseLOBEnv):
         # Save time of final message to add to state
         time = total_messages[-1, -2:]
         # To only ever consider the trades from the last step simply replace state.trades with an array of -1s of the same size. 
-        trades_reinit = (jnp.ones((self.nTradesLogged, 6)) * -1).astype(jnp.int32)
+        trades_reinit = (jnp.ones((self.nTradesLogged, 8)) * -1).astype(jnp.int32)
         # Process messages of step (action+data) through the orderbook
         (asks, bids, trades), (bestasks, bestbids) = job.scan_through_entire_array_save_bidask(
             total_messages,
@@ -810,7 +810,7 @@ class ExecutionEnv(BaseLOBEnv):
 
         def place_doom_trade(trades, price, quant, time):
             doom_trade = job.create_trade(
-                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time)
+                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time,self.trader_unique_id,-666666)
             # jax.debug.print('doom_trade\n {}', doom_trade)
             trades = job.add_trade(trades, doom_trade)
             return trades

@@ -149,6 +149,8 @@ def match_order(data_tuple):
                     agrOID (Int): Order ID of the incoming order
                     time (Int): Arrival time (s) of incoming order
                     time_ns (Int): Arrival time (ns) of incoming order
+                    agrTID (Int): Trader ID of the incoming order
+                    side
         
         Returns:
                 data_tuple (Tuple): Same as input tuple, but without
@@ -166,13 +168,14 @@ def match_order(data_tuple):
     passTID=orderside[top_order_idx,3]
     trade=trade.at[emptyidx,:] \
                 .set(jnp.array([orderside[top_order_idx,0],
-                                orderside[top_order_idx,1]-newquant,
+                                -1*side*(orderside[top_order_idx,1]-newquant),
                                 orderside[top_order_idx,2],
                                 [agrOID],
                                 [time],
                                 [time_ns],
-                                passTID,
-                                [agrTID]]).transpose())
+                                [agrTID],
+                                [passTID],
+                               ]).transpose())
     orderside=_removeZeroNegQuant(orderside.at[top_order_idx,1].set(newquant))
     return (orderside.astype(jnp.int32), jnp.squeeze(qtm),
              price, trade, agrOID,time,time_ns,agrTID)
@@ -240,7 +243,7 @@ def _check_before_matching_bid(data_tuple):
     return jnp.squeeze(returnarray)
 
 @jax.jit
-def _match_against_bid_orders(orderside,qtm,price,trade,agrOID,time,time_ns,agrTID):
+def _match_against_bid_orders(orderside,qtm,price,trade,agrOID,time,time_ns,agrTID,side):
     """Wrapper for the while loop that gets the top bid order, and
     matches the incoming order against it whilst the 
     _check_before_matching_bid function remains true.
@@ -325,6 +328,7 @@ def bid_lim(msg,askside,bidside,trades):
                     traderid (Int): Trader ID, rarely available
                     time (Int): Time of arrival (full seconds)
                     time_ns (Int): Time of arrival (remaining ns)
+
                 askside (Array): All ask orders in book
                 bidside (Array): All bid orders in book
                 trades (Array): Running count of all occured trades
@@ -398,7 +402,8 @@ def ask_lim(msg,askside,bidside,trades):
                                          msg['orderid'],
                                          msg["time"],
                                          msg["time_ns"],
-                                         msg["traderid"])
+                                         msg["traderid"],
+                                         msg["side"])
     msg["quantity"]=matchtuple[1] #Remaining quantity
     asks=add_order(askside,msg)
     return asks,matchtuple[0],matchtuple[3]
@@ -430,6 +435,7 @@ def ask_cancel(msg,askside,bidside,trades):
 ################  BRANCHING FUNCTIONS ################
 @jax.jit
 def cond_type_side(book_state, data):
+    #data is message
     """Branching function which calls the relevant function based on
     the side and type fields of the incoming message. Organises the 
     array from data as a message Dict. 
@@ -633,8 +639,7 @@ def scan_through_entire_array_save_bidask(msg_array,book_state,N_steps):
                                          book_state,
                                          msg_array)
     
-    return (last_state[0],last_state[1],last_state[2]),\
-            (all_bid_asks[0][-N_steps:],all_bid_asks[1][-N_steps:])
+    return (last_state[0],last_state[1],last_state[2]),(all_bid_asks[0][-N_steps:],all_bid_asks[1][-N_steps:])
 
 ################ GET CANCEL MESSAGES ################
 

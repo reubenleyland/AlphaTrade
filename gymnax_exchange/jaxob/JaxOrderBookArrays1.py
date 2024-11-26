@@ -149,7 +149,6 @@ def match_order(data_tuple):
                     agrOID (Int): Order ID of the incoming order
                     time (Int): Arrival time (s) of incoming order
                     time_ns (Int): Arrival time (ns) of incoming order
-                    agrTID (Int): Trader ID of the incoming order
         
         Returns:
                 data_tuple (Tuple): Same as input tuple, but without
@@ -159,25 +158,21 @@ def match_order(data_tuple):
 
     """
     (top_order_idx, orderside, qtm, price,
-            trade, agrOID, time, time_ns,agrTID) = data_tuple
+            trade, agrOID, time, time_ns) = data_tuple
     newquant=jnp.maximum(0,orderside[top_order_idx,1]-qtm)
     qtm=qtm-orderside[top_order_idx,1]
     qtm=qtm.astype(jnp.int32)
     emptyidx=jnp.where(trade==-1,size=1,fill_value=-1)[0]
-    passTID=orderside[top_order_idx,3]
     trade=trade.at[emptyidx,:] \
                 .set(jnp.array([orderside[top_order_idx,0],
                                 orderside[top_order_idx,1]-newquant,
                                 orderside[top_order_idx,2],
                                 [agrOID],
                                 [time],
-                                [time_ns],
-                                [agrTID],
-                                passTID
-                               ]).transpose())
+                                [time_ns]]).transpose())
     orderside=_removeZeroNegQuant(orderside.at[top_order_idx,1].set(newquant))
     return (orderside.astype(jnp.int32), jnp.squeeze(qtm),
-             price, trade, agrOID,time,time_ns,agrTID)
+             price, trade, agrOID, time, time_ns)
 
 
 @jax.jit
@@ -235,14 +230,14 @@ def _check_before_matching_bid(data_tuple):
     quantity in the incoming ask order, and whether there are still bid
     orders in the book. 
     """
-    top_order_idx,orderside,qtm,price,trade,_,_,_,_=data_tuple
+    top_order_idx,orderside,qtm,price,trade,_,_,_=data_tuple
     returnarray=((orderside[top_order_idx,0]>=price)
                   & (qtm>0)
                   & (orderside[top_order_idx,0]!=-1))
     return jnp.squeeze(returnarray)
 
 @jax.jit
-def _match_against_bid_orders(orderside,qtm,price,trade,agrOID,time,time_ns,agrTID):
+def _match_against_bid_orders(orderside,qtm,price,trade,agrOID,time,time_ns):
     """Wrapper for the while loop that gets the top bid order, and
     matches the incoming order against it whilst the 
     _check_before_matching_bid function remains true.
@@ -251,11 +246,11 @@ def _match_against_bid_orders(orderside,qtm,price,trade,agrOID,time,time_ns,agrT
     """
     top_order_idx=_get_top_bid_order_idx(orderside)
     (top_order_idx,orderside,
-     qtm,price,trade,_,_,_,_)=jax.lax.while_loop(_check_before_matching_bid,
+     qtm,price,trade,_,_,_)=jax.lax.while_loop(_check_before_matching_bid,
                                                _match_bid_order,
                                                (top_order_idx,orderside,
                                                 qtm,price,trade,agrOID,
-                                                time,time_ns,agrTID))
+                                                time,time_ns))
     return (orderside,qtm,price,trade)
 
 @jax.jit
@@ -266,14 +261,14 @@ def _check_before_matching_ask(data_tuple):
     quantity in the incoming ask order, and whether there are still bid
     orders in the book. 
     """
-    top_order_idx,orderside,qtm,price,trade,_,_,_,_=data_tuple
+    top_order_idx,orderside,qtm,price,trade,_,_,_=data_tuple
     returnarray=((orderside[top_order_idx,0]<=price)
                   & (qtm>0) 
                   & (orderside[top_order_idx,0]!=-1))
     return jnp.squeeze(returnarray)
 
 @jax.jit
-def _match_against_ask_orders(orderside,qtm,price,trade,agrOID,time,time_ns,agrTID):
+def _match_against_ask_orders(orderside,qtm,price,trade,agrOID,time,time_ns):
     """Wrapper for the while loop that gets the top ask order, and
     matches the incoming order against it whilst the 
     _check_before_matching_ask function remains true.
@@ -282,11 +277,11 @@ def _match_against_ask_orders(orderside,qtm,price,trade,agrOID,time,time_ns,agrT
     """
     top_order_idx=_get_top_ask_order_idx(orderside)
     (top_order_idx,orderside,
-     qtm,price,trade,_,_,_,_)=jax.lax.while_loop(_check_before_matching_ask,
+     qtm,price,trade,_,_,_)=jax.lax.while_loop(_check_before_matching_ask,
                                                _match_ask_order,
                                                (top_order_idx,orderside,
                                                 qtm,price,trade,agrOID,
-                                                time,time_ns,agrTID))
+                                                time,time_ns))
     return (orderside,qtm,price,trade)
 
 ################ TYPE AND SIDE FUNCTIONS ################
@@ -327,7 +322,6 @@ def bid_lim(msg,askside,bidside,trades):
                     traderid (Int): Trader ID, rarely available
                     time (Int): Time of arrival (full seconds)
                     time_ns (Int): Time of arrival (remaining ns)
-
                 askside (Array): All ask orders in book
                 bidside (Array): All bid orders in book
                 trades (Array): Running count of all occured trades
@@ -342,8 +336,7 @@ def bid_lim(msg,askside,bidside,trades):
                                          trades,
                                          msg['orderid'],
                                          msg["time"],
-                                         msg["time_ns"],
-                                         msg["traderid"])
+                                         msg["time_ns"])
     msg["quantity"]=matchtuple[1] #Remaining quantity
     bids=add_order(bidside,msg)
     return matchtuple[0],bids,matchtuple[3]
@@ -400,8 +393,7 @@ def ask_lim(msg,askside,bidside,trades):
                                          trades,
                                          msg['orderid'],
                                          msg["time"],
-                                         msg["time_ns"],
-                                         msg["traderid"])
+                                         msg["time_ns"])
     msg["quantity"]=matchtuple[1] #Remaining quantity
     asks=add_order(askside,msg)
     return asks,matchtuple[0],matchtuple[3]
@@ -636,7 +628,8 @@ def scan_through_entire_array_save_bidask(msg_array,book_state,N_steps):
                                          book_state,
                                          msg_array)
     
-    return (last_state[0],last_state[1],last_state[2]),(all_bid_asks[0][-N_steps:],all_bid_asks[1][-N_steps:])
+    return (last_state[0],last_state[1],last_state[2]),\
+            (all_bid_asks[0][-N_steps:],all_bid_asks[1][-N_steps:])
 
 ################ GET CANCEL MESSAGES ################
 
@@ -700,17 +693,17 @@ def add_trade(trades, new_trade):
     trades = trades.at[emptyidx, :].set(new_trade)
     return trades
     
-    
 @jax.jit
-def create_trade(price, quant, agrOID, passOID, time, time_ns,agrTID,passTID):
-    return jnp.array([price, quant, agrOID, passOID, time, time_ns,agrTID,passTID], dtype=jnp.int32)
+def create_trade(price, quant, agrOID, passOID, time, time_ns):
+    return jnp.array([price, quant, agrOID, passOID, time, time_ns], dtype=jnp.int32)
 
 @jax.jit
 def get_agent_trades(trades, agent_id):
     # Gather the 'trades' that are nonempty, make the rest 0
     executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
     # Mask to keep only the trades where the RL agent is involved, apply mask.
-    mask2 = (agent_id == executed[:, 6])  | (agent_id == executed[:, 7]) #Mask to find trader ID
+    mask2 = ((agent_id <= executed[:, 2]) & (executed[:, 2] < 0)) \
+          | ((agent_id <= executed[:, 3]) & (executed[:, 3] < 0))
     agent_trades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
     return agent_trades
 
