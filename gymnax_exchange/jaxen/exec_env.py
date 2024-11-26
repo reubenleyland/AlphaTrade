@@ -810,7 +810,7 @@ class ExecutionEnv(BaseLOBEnv):
 
         def place_doom_trade(trades, price, quant, time):
             doom_trade = job.create_trade(
-                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time,self.trader_unique_id,-666666)
+                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time)
             # jax.debug.print('doom_trade\n {}', doom_trade)
             trades = job.add_trade(trades, doom_trade)
             return trades
@@ -1226,6 +1226,7 @@ if __name__ == "__main__":
         episode_time=config["EPISODE_TIME"],  # in seconds
     )
     # print(env_params.message_data.shape, env_params.book_data.shape)
+
 
     start=time.time()
     obs,state=env.reset(key_reset, env_params)

@@ -171,10 +171,7 @@ def match_order(data_tuple):
                                 orderside[top_order_idx,2],
                                 [agrOID],
                                 [time],
-                                [time_ns],
-                                [agrTID],
-                                passTID
-                               ]).transpose())
+                                [time_ns]]).transpose())
     orderside=_removeZeroNegQuant(orderside.at[top_order_idx,1].set(newquant))
     return (orderside.astype(jnp.int32), jnp.squeeze(qtm),
              price, trade, agrOID,time,time_ns,agrTID)
@@ -702,8 +699,8 @@ def add_trade(trades, new_trade):
     
     
 @jax.jit
-def create_trade(price, quant, agrOID, passOID, time, time_ns,agrTID,passTID):
-    return jnp.array([price, quant, agrOID, passOID, time, time_ns,agrTID,passTID], dtype=jnp.int32)
+def create_trade(price, quant, agrOID, passOID, time, time_ns):
+    return jnp.array([price, quant, agrOID, passOID, time, time_ns], dtype=jnp.int32)
 
 @jax.jit
 def get_agent_trades(trades, agent_id):
