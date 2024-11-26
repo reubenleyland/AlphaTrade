@@ -269,7 +269,7 @@ class BaseLOBEnv(environment.Environment):
         #Initialise both sides of the book as being empty
         asks_raw=job.init_orderside(self.nOrdersPerSide)
         bids_raw=job.init_orderside(self.nOrdersPerSide)
-        trades_init=(jnp.ones((self.nTradesLogged,6))*-1).astype(jnp.int32)
+        trades_init=(jnp.ones((self.nTradesLogged,8))*-1).astype(jnp.int32)
         #Process the initial messages through the orderbook
         ordersides=job.scan_through_entire_array(init_orders,(asks_raw,bids_raw,trades_init))
         return EnvState(ask_raw_orders=ordersides[0],
