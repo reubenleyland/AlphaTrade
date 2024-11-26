@@ -810,7 +810,7 @@ class ExecutionEnv(BaseLOBEnv):
 
         def place_doom_trade(trades, price, quant, time):
             doom_trade = job.create_trade(
-                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time)
+                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time, self.trader_unique_id, -666666)
             # jax.debug.print('doom_trade\n {}', doom_trade)
             trades = job.add_trade(trades, doom_trade)
             return trades
@@ -1233,7 +1233,7 @@ if __name__ == "__main__":
     print("Time for reset: \n",time.time()-start)
     # print("State after reset: \n",state)
    
-    print(state.trades)
+    
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
     for i in range(1,10):
@@ -1249,6 +1249,7 @@ if __name__ == "__main__":
         start=time.time()
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
+        print(state.trades)
         for key, value in info.items():
             print(key, value)
             print('is_sell_task', state.is_sell_task)
