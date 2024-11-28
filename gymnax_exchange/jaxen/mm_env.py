@@ -221,6 +221,7 @@ class ExecutionEnv(BaseLOBEnv):
         action = self._reshape_action(input_action, state, params,key)
         action_msgs = self._getActionMsgs(action, state, params)
         action_prices = action_msgs[:, 3]
+        print('action_msg')
         # jax.debug.print('action_msgs\n {}', action_msgs)
 
         raw_order_side = jax.lax.cond(
@@ -341,7 +342,7 @@ class ExecutionEnv(BaseLOBEnv):
             best_asks = bestasks,
             best_bids = bestbids,
             init_price = state.init_price,
-            inventory=extras["end_inventory"]
+            inventory=extras["end_inventory"],
             task_to_execute = state.task_to_execute,
             quant_executed = quant_executed,
             total_revenue = state.total_revenue + extras["revenue"],
@@ -726,13 +727,13 @@ class ExecutionEnv(BaseLOBEnv):
             NT = best_bid
             PP = best_bid - self.tick_size*self.n_ticks_in_book
             MKT = job.MAX_INT
-            if action.shape[0] == 4:
+            if action.shape[0]//2 == 4:
                 return FT, M, NT, PP, MKT
-            elif action.shape[0] == 3:
+            elif action.shape[0]//2 == 3:
                 return FT, NT, PP, MKT
-            elif action.shape[0] == 2:
+            elif action.shape[0]//2 == 2:
                 return FT, NT, MKT
-            elif action.shape[0] == 1:
+            elif action.shape[0]//2 == 1:
                 return FT, MKT
 
         def sell_task_prices(best_ask, best_bid):
@@ -745,13 +746,13 @@ class ExecutionEnv(BaseLOBEnv):
             NT = best_ask
             PP = best_ask + self.tick_size*self.n_ticks_in_book
             MKT = 0
-            if action.shape[0] == 4:
+            if action.shape[0]//2 == 4:
                 return FT, M, NT, PP, MKT
-            elif action.shape[0] == 3:
+            elif action.shape[0]//2 == 3:
                 return FT, NT, PP, MKT
-            elif action.shape[0] == 2:
+            elif action.shape[0]//2 == 2:
                 return FT, NT, MKT
-            elif action.shape[0] == 1:
+            elif action.shape[0]//2 == 1:
                 return FT, MKT
 
         # ============================== Get Action_msgs ==============================
@@ -1280,12 +1281,17 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
-        key_policy, _ = jax.random.split(key_policy, 2)
-        key_step, _ = jax.random.split(key_step, 2)
-        # test_action=env.action_space().sample(key_policy)
-        test_action = env.action_space().sample(key_policy) // 10
-        # test_action = jnp.array([100, 10])
-        print(f"Sampled {i}th actions are: ", test_action)
+        # Split key for sampling an 8-dimensional action
+        key_policy, subkey = jax.random.split(key_policy, 2)
+        action_keys = jax.random.split(subkey, 8)  # Generate 8 keys for each dimension
+
+        # Sample a value for each of the 8 dimensions (boxes)
+        test_action = jnp.array([
+            env.action_space().sample(key) for key in action_keys
+        ]) // 10  #
+
+        key_step, subkey_step = jax.random.split(key_step, 2)
+        print(f"Sampled {i}th action: {test_action}")
         start=time.time()
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
