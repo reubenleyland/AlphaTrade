@@ -341,6 +341,7 @@ class ExecutionEnv(BaseLOBEnv):
             best_asks = bestasks,
             best_bids = bestbids,
             init_price = state.init_price,
+            inventory=extras["end_inventory"]
             task_to_execute = state.task_to_execute,
             quant_executed = quant_executed,
             total_revenue = state.total_revenue + extras["revenue"],
@@ -463,6 +464,7 @@ class ExecutionEnv(BaseLOBEnv):
             best_bids=jnp.resize(best_bid,(self.stepLines,2)),
             init_price=M,
             task_to_execute=self.max_task_size,
+            inventory=0,
             quant_executed=0,
             total_revenue=0.,
             drift_return=0.,
@@ -755,9 +757,9 @@ class ExecutionEnv(BaseLOBEnv):
         # ============================== Get Action_msgs ==============================
         # --------------- 01 rest info for deciding action_msgs ---------------
         types = jnp.ones((self.n_actions,), jnp.int32)
-        sides_bids =  jnp.ones((self.n_actions/2,), jnp.int32)
-        sides_asks= (-1) * jnp.ones((self.n_actions/2,), jnp.int32)
-        sides=jnp.concat(sides_bids,sides_asks)
+        sides_bids = jnp.ones((self.n_actions // 2,), jnp.int32)  # Use integer division to ensure result is an int
+        sides_asks = (-1) * jnp.ones((self.n_actions // 2,), jnp.int32)
+        sides = jnp.concatenate([sides_bids, sides_asks])
 
         trader_ids = jnp.ones((self.n_actions,), jnp.int32) * self.trader_unique_id #This agent will always have the same (unique) trader ID
         order_ids = (jnp.ones((self.n_actions,), jnp.int32) *
@@ -777,7 +779,7 @@ class ExecutionEnv(BaseLOBEnv):
         
         buy_levels=buy_task_prices(best_ask, best_bid)
         buy_levels = jnp.array(buy_levels[:-1])
-        price_levels=jnp.concat(buy_levels,sell_levels)
+        price_levels=jnp.concatenate([buy_levels,sell_levels])
 
         #price_levels = jax.lax.cond(
         #    state.is_sell_task,
