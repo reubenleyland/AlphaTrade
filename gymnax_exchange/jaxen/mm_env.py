@@ -171,7 +171,7 @@ class EnvParams(BaseEnvParams):
 class ExecutionEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=1., ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=.1, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -179,6 +179,7 @@ class ExecutionEnv(BaseLOBEnv):
         self.action_type = action_type # 'delta' or 'pure'
         self.max_task_size = max_task_size
         self.inventory=0
+        self.marekt_share=0.
         self.rewardLambda = rewardLambda
         # TODO: fix!! this can be overwritten in the base class
         self.n_actions = 8 # 4: (FT, M, NT, PP), 3: (FT, NT, PP), 2 (FT, NT), 1 (FT)
@@ -294,7 +295,6 @@ class ExecutionEnv(BaseLOBEnv):
         sellQuant=jnp.abs(agent_sells[:, 1]).sum()
 
         #totalQuant_step=buyQuant+sellQuant
-        #
         quant_left = state.task_to_execute
         
         #jax.debug.print('agent_trades\n {}', agent_trades[:30])
@@ -383,8 +383,10 @@ class ExecutionEnv(BaseLOBEnv):
             "mkt_forced_quant": mkt_exec_quant + doom_quant,
             "doom_quant": doom_quant,
             "is_sell_task": state.is_sell_task,
+            "market_share":extras["market_share"]
+
         }
-        jax.debug.print('reset state {}',state)
+        #jax.debug.print('reset state {}',state)
         return self._get_obs(state, params), state, reward, done, info
     
 
@@ -948,7 +950,6 @@ class ExecutionEnv(BaseLOBEnv):
     def _get_reward(self, state: EnvState, params: EnvParams, trades: chex.Array) -> jnp.int32:
         # ====================get reward and revenue ==========================================#
         # Gather the 'trades' that are nonempty, make the rest 0
-        # Here this means we make any price >0 go away as this is a padding trade
         executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
              
         # Mask to keep only the trades where the RL agent is involved, apply mask.
@@ -958,28 +959,27 @@ class ExecutionEnv(BaseLOBEnv):
 
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
-        #Logic: q>0, TIDs=BUY; Q<0 TIDa= BUY
+        #Logic: Q>0, TIDs=BUY; Q<0 TIDa= BUY
         mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == executed[:, 7])))
-
         agent_buys=jnp.where(mask_buy[:, jnp.newaxis], executed, 0)
         agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, executed)
 
+        #Find amount bought and sold in the step
         buyQuant=jnp.abs(agent_buys[:, 1]).sum()
         sellQuant=jnp.abs(agent_sells[:, 1]).sum()
 
-        totalQuant=buyQuant+sellQuant
+        #Find total traded volume
+        TradedVolume=buyQuant+sellQuant
 
         #Calculate the change in inventory & the new inventory
         inventory_delta = buyQuant - sellQuant
-        end_inventory=state.inventory+inventory_delta
-        #notice this means I could have negative inventory?
-
+        inventory=state.inventory+inventory_delta
+       
         #Find the new obsvered mid price at the end of the step.
-        Mid_price_end = (state.best_bids[-1][0] + state.best_asks[-1][0]) // 2 // self.tick_size * self.tick_size
- 
-                       
-        #Inventory PnL: current inventory price-previous:
-        InventoryPnL=end_inventory*Mid_price_end-state.inventory*state.mid_price
+        mid_price_end = (state.best_bids[-1][0] + state.best_asks[-1][0]) // 2 // self.tick_size * self.tick_size
+           
+        #Inventory PnL: 
+        InventoryPnL=inventory*mid_price_end-state.inventory*state.mid_price
 
         #Market Making PNL:
         ##This bit gets some design choices. make average?       
@@ -991,7 +991,6 @@ class ExecutionEnv(BaseLOBEnv):
 
             
         #make the rewards a damped version of the inventory to discourage holding inventory
-        
         reward=buyPnL+sellPnL+self.rewardLambda*InventoryPnL
         undamped_reward=buyPnL+sellPnL+InventoryPnL
 
@@ -1000,12 +999,11 @@ class ExecutionEnv(BaseLOBEnv):
         outgoing=(agent_buys[:, 0] * agent_buys[:, 1]).sum() / self.tick_size
         revenue=income-outgoing+InventoryPnL
         
-
-        other_exec_quants = otherTrades[:, 1].sum()
- 
         #calculate a fraction of total market activity attributable to us.
-        market_share = totalQuant / (totalQuant + other_exec_quants)
-        # ---------- normalize the reward ----------
+        other_exec_quants = otherTrades[:, 1].sum()
+        market_share = TradedVolume / (TradedVolume + other_exec_quants)
+
+        # ---------- normalize the reward ----------#
         # reward /= 10_000
         reward_scaled = reward / 100_000
         # reward /= params.avg_twap_list[state.window_index]
@@ -1013,8 +1011,8 @@ class ExecutionEnv(BaseLOBEnv):
             "market_share": market_share,
             "undamped_reward":undamped_reward,
             "revenue": revenue / 100_000,  # pure revenue is not informative if direction is random (-> flip and normalise)
-            "end_inventory":end_inventory,
-            "mid_price":Mid_price_end,
+            "end_inventory":inventory,
+            "mid_price":mid_price_end,
             "agentQuant":inventory_delta
         }
 
@@ -1263,7 +1261,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure", # "pure",
         "REWARD_LAMBDA": 1.0,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 60 * 5, # 60 seconds
+        "EPISODE_TIME": 120 * 5, # 60 seconds
     }
         
     rng = jax.random.PRNGKey(0)
@@ -1304,7 +1302,7 @@ if __name__ == "__main__":
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
-        test_action = jnp.array([1,1,1,1,1,1,1,1])
+        test_action = env.action_space().sample(key_policy) // 10
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)
@@ -1312,10 +1310,14 @@ if __name__ == "__main__":
         
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
-       
-        for key, value in info.items():
-            print(key, value)
-            print('is_sell_task', state.is_sell_task)
+        print('trades',state.trades)
+        print('revenue', state.total_revenue)
+        print('inventory',state.inventory)
+        print('reward',reward)
+        print(info['market_share'])
+        #for key, value in info.items():
+           #print(key, value)
+            
         # print(f"State after {i} step: \n",state,done,file=open('output.txt','a'))
         # print(f"Time for {i} step: \n",time.time()-start)
         if done:
