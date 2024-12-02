@@ -957,12 +957,17 @@ class ExecutionEnv(BaseLOBEnv):
         agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
         otherTrades = jnp.where(mask2[:, jnp.newaxis], 0, executed)
 
+
+
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
         #Logic: Q>0, TIDs=BUY; Q<0 TIDa= BUY
         mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == executed[:, 7])))
-        agent_buys=jnp.where(mask_buy[:, jnp.newaxis], executed, 0)
-        agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, executed)
+        agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
+        agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, agentTrades)
+
+        jax.debug.print("Agent Buys: {}", agent_buys)
+        jax.debug.print("Agent Sells: {}", agent_sells)
 
         #Find amount bought and sold in the step
         buyQuant=jnp.abs(agent_buys[:, 1]).sum()
@@ -974,6 +979,7 @@ class ExecutionEnv(BaseLOBEnv):
         #Calculate the change in inventory & the new inventory
         inventory_delta = buyQuant - sellQuant
         inventory=state.inventory+inventory_delta
+
        
         #Find the new obsvered mid price at the end of the step.
         mid_price_end = (state.best_bids[-1][0] + state.best_asks[-1][0]) // 2 // self.tick_size * self.tick_size
@@ -1291,11 +1297,12 @@ if __name__ == "__main__":
     obs,state=env.reset(key_reset, env_params)
     print("Time for reset: \n",time.time()-start)
 
-    print("State after reset: \n",state)
+    #print("State after reset: \n",state)
+    print("Inventory after reset: \n",state.inventory)
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,10):
+    for i in range(1,2):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
