@@ -28,9 +28,9 @@ sys.path.append('.')
 #sys.path.append('../AlphaTrade/purejaxrl')
 #sys.path.append('../AlphaTrade')
 from purejaxrl.wrappers import FlattenObservationWrapper, LogWrapper,ClipAction, VecEnv,NormalizeVecObservation,NormalizeVecReward
-from purejaxrl.experimental.s5.s5 import StackedEncoderModel#, init_S5SSM, make_DPLR_HiPPO
-from gymnax_exchange.jaxen.exec_env import ExecutionEnv
-#from gymnax_exchange.jaxen.mm_env import MarketMakingEnv
+#from purejaxrl.experimental.s5.s5 import StackedEncoderModel#, init_S5SSM, make_DPLR_HiPPO
+#from gymnax_exchange.jaxen.exec_env import ExecutionEnv
+from gymnax_exchange.jaxen.mm_env import MarketMakingEnv
 from gymnax_exchange.jaxrl.actorCritic import ActorCriticRNN, ScannedRNN
 from gymnax_exchange.jaxrl import actorCriticS5
 import os
@@ -80,7 +80,7 @@ def reset_adam(train_state, reset_type="count"):
     return train_state.replace(opt_state=opt_state)
 
 def make_train(config):
-    env = ExecutionEnv(
+    env = MarketMakingEnv(
         alphatradePath=config["ATFOLDER"],
         task=config["TASKSIDE"],
         window_index=config["WINDOW_INDEX"],

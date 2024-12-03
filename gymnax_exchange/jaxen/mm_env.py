@@ -1,5 +1,5 @@
 """
-Execution Environment for Limit Order Book  with variable start time for episodes. 
+Makret Making Environment for Limit Order Book  with variable start time for episodes. 
 
 University of Oxford
 Corresponding Author: 
@@ -22,7 +22,7 @@ EnvState:   Dataclass to encapsulate the current state of the environment,
             including the raw order book, trades, and time information.
 EnvParams:  Configuration class for environment-specific parameters, 
             such as task details, message and book data, and episode timing.
-ExecutionEnv: Environment class inheriting from BaseLOBEnv, 
+MarketMakingEnv: Environment class inheriting from BaseLOBEnv, 
               offering specialized methods for order placement and 
               execution tasks in trading environments. 
 
@@ -94,6 +94,7 @@ import gymnax
 from gymnax.environments import environment, spaces
 # sys.path.append('/Users/sasrey/AlphaTrade')
 # sys.path.append('/homes/80/kang/AlphaTrade')
+
 sys.path.append(os.path.abspath('/home/duser/AlphaTrade'))
 sys.path.append('.')
 from gymnax_exchange.jaxob import JaxOrderBookArrays as job
@@ -168,7 +169,7 @@ class EnvParams(BaseEnvParams):
     task_size: int 
     reward_lambda: float = 1.0
 
-class ExecutionEnv(BaseLOBEnv):
+class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
             max_task_size = 500, rewardLambda=.1, ep_type="fixed_time"):
@@ -751,7 +752,7 @@ class ExecutionEnv(BaseLOBEnv):
         def sell_task_prices(best_ask, best_bid):
             # FT = best_bid
             # essentially convert to market order (20% lower price than best bid)
-            FT = ((best_bid * 0.8) // self.tick_size * self.tick_size).astype(jnp.int32)
+            FT = ((best_bid) // self.tick_size * self.tick_size).astype(jnp.int32)
             # mid defaults to one tick more passive if between ticks
             M = (jnp.ceil((best_bid + best_ask) / 2 // self.tick_size)
                  * self.tick_size).astype(jnp.int32)
@@ -1253,7 +1254,7 @@ if __name__ == "__main__":
         print("AlphaTrade folder:",ATFolder)
     except:
         # ATFolder = "./testing_oneDay"
-        ATFolder = "./training_oneDay/"
+        ATFolder = "./training_oneDay"
         # ATFolder = '/home/duser/AlphaTrade'
         # ATFolder = '/homes/80/kang/AlphaTrade'
         # ATFolder = "/homes/80/kang/AlphaTrade/testing_oneDay"
@@ -1273,8 +1274,8 @@ if __name__ == "__main__":
     rng = jax.random.PRNGKey(0)
     rng, key_reset, key_policy, key_step = jax.random.split(rng, 4)
 
-    # env=ExecutionEnv(ATFolder,"sell",1)
-    env = ExecutionEnv(
+    # env=MarketMakingEnv(ATFolder,"sell",1)
+    env = MarketMakingEnv(
         alphatradePath=config["ATFOLDER"],
         task=config["TASKSIDE"],
         window_index=config["WINDOW_INDEX"],
@@ -1302,7 +1303,7 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,2):
+    for i in range(1,10):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)

@@ -1063,6 +1063,7 @@ class ExecutionEnv(BaseLOBEnv):
             # jax.debug.print('normalized obs:\n {}', obs)
         if flatten:
             obs, _ = jax.flatten_util.ravel_pytree(obs)
+
         return obs
 
     def _get_obs_full(self, state: EnvState, params:EnvParams) -> chex.Array:
@@ -1187,7 +1188,7 @@ if __name__ == "__main__":
         print("AlphaTrade folder:",ATFolder)
     except:
         # ATFolder = "./testing_oneDay"
-        ATFolder = "./training_oneDay/"
+        ATFolder = "./training_oneDay"
         # ATFolder = '/home/duser/AlphaTrade'
         # ATFolder = '/homes/80/kang/AlphaTrade'
         # ATFolder = "/homes/80/kang/AlphaTrade/testing_oneDay"
