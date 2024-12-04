@@ -28,7 +28,7 @@ sys.path.append('.')
 #sys.path.append('../AlphaTrade/purejaxrl')
 #sys.path.append('../AlphaTrade')
 from purejaxrl.wrappers import FlattenObservationWrapper, LogWrapper,ClipAction, VecEnv,NormalizeVecObservation,NormalizeVecReward
-#from purejaxrl.experimental.s5.s5 import StackedEncoderModel#, init_S5SSM, make_DPLR_HiPPO
+from purejaxrl.experimental.s5.s5 import StackedEncoderModel#, init_S5SSM, make_DPLR_HiPPO
 #from gymnax_exchange.jaxen.exec_env import ExecutionEnv
 from gymnax_exchange.jaxen.mm_env import MarketMakingEnv
 from gymnax_exchange.jaxrl.actorCritic import ActorCriticRNN, ScannedRNN
@@ -652,8 +652,8 @@ def make_train(config):
                     evaluation()
                     
                     revenues = info["total_revenue"][info["returned_episode"]]
-                    quant_executed = info["quant_executed"][info["returned_episode"]]
-                    average_price = info["average_price"][info["returned_episode"]]
+                    #quant_executed = info["quant_executed"][info["returned_episode"]]
+                    #average_price = info["average_price"][info["returned_episode"]]
                     
                     # slippage_rm = info["slippage_rm"][info["returned_episode"]]
                     # price_drift_rm = info["price_drift_rm"][info["returned_episode"]]
@@ -661,11 +661,11 @@ def make_train(config):
                     # vwap_rm = info["vwap_rm"][info["returned_episode"]]
                     
                     current_step = info["current_step"][info["returned_episode"]]
-                    mkt_forced_quant = info["mkt_forced_quant"][info["returned_episode"]]
-                    doom_quant = info["doom_quant"][info["returned_episode"]]
-                    trade_duration = info["trade_duration"][info["returned_episode"]]
-                    advantage_reward = info["advantage_reward"][info["returned_episode"]]
-                    drift_reward = info["drift_reward"][info["returned_episode"]]
+                    ##mkt_forced_quant = info["mkt_forced_quant"][info["returned_episode"]]
+                    ##doom_quant = info["doom_quant"][info["returned_episode"]]
+                    ##trade_duration = info["trade_duration"][info["returned_episode"]]
+                    #advantage_reward = info["advantage_reward"][info["returned_episode"]]
+                    #drift_reward = info["drift_reward"][info["returned_episode"]]
                     
                     '''
                     print(info["current_step"][0,0],info["total_revenue"][0,0],info["average_price"][0,0],info['quant_executed'][0,0],info['action'][0,0])  
@@ -689,18 +689,18 @@ def make_train(config):
                                 "global_step": jnp.max(timesteps), # timesteps[t],
                                 "episodic_return": jnp.mean(return_values), #return_values[t],
                                 "episodic_revenue": jnp.mean(revenues), #revenues[t],
-                                "quant_executed": jnp.mean(quant_executed), #quant_executed[t],
-                                "average_price": jnp.mean(average_price), #average_price[t],
+                                #"quant_executed": jnp.mean(quant_executed), #quant_executed[t],
+                                #"average_price": jnp.mean(average_price), #average_price[t],
                                 # "slippage_rm":slippage_rm[t],
                                 # "price_adv_rm":price_adv_rm[t],
                                 # "price_drift_rm":price_drift_rm[t],
                                 # "vwap_rm":vwap_rm[t],
                                 "current_step": jnp.mean(current_step), #current_step[t],
-                                "advantage_reward": jnp.mean(advantage_reward), #advantage_reward[t],
-                                "drift_reward": jnp.mean(drift_reward), #drift_reward[t],
-                                "mkt_forced_quant": jnp.mean(mkt_forced_quant), #mkt_forced_quant[t],
-                                "doom_quant": jnp.mean(doom_quant), #doom_quant[t],
-                                "trade_duration": jnp.mean(trade_duration), #trade_duration[t],
+                                #"advantage_reward": jnp.mean(advantage_reward), #advantage_reward[t],
+                                #"drift_reward": jnp.mean(drift_reward), #drift_reward[t],
+                                ##"mkt_forced_quant": jnp.mean(mkt_forced_quant), #mkt_forced_quant[t],
+                                ##"doom_quant": jnp.mean(doom_quant), #doom_quant[t],
+                                ##"trade_duration": jnp.mean(trade_duration), #trade_duration[t],
                                 **trainstate_logs,
                             },
                             commit=True

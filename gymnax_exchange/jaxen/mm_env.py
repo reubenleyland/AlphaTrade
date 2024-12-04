@@ -326,7 +326,7 @@ class MarketMakingEnv(BaseLOBEnv):
         trade_duration = state.trade_duration + trade_duration_step
         #jax.debug.print('Prev_actions: {}', jnp.vstack([action_prices, action]).T)
         #jax.debug.print('trade_duration_step: {}, trade_duration: {}', trade_duration_step, trade_duration)
-        jax.debug.print('mkt_exec_quant {}',mkt_exec_quant)
+        #jax.debug.print('mkt_exec_quant {}',mkt_exec_quant)
         state = EnvState(
             #jnp.vstack([jnp.arange(3), jnp.arange(3)]).T
             prev_action = jnp.vstack([action_prices, action]).T,  # includes prices and quantitites  
@@ -967,8 +967,8 @@ class MarketMakingEnv(BaseLOBEnv):
         agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
         agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, agentTrades)
 
-        jax.debug.print("Agent Buys: {}", agent_buys)
-        jax.debug.print("Agent Sells: {}", agent_sells)
+        #jax.debug.print("Agent Buys: {}", agent_buys)
+        #jax.debug.print("Agent Sells: {}", agent_sells)
 
         #Find amount bought and sold in the step
         buyQuant=jnp.abs(agent_buys[:, 1]).sum()
@@ -1004,7 +1004,7 @@ class MarketMakingEnv(BaseLOBEnv):
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
         income=(agent_sells[:, 0]* agent_sells[:, 1]).sum() / self.tick_size
         outgoing=(agent_buys[:, 0] * agent_buys[:, 1]).sum() / self.tick_size
-        revenue=income-outgoing+InventoryPnL
+        revenue=income-outgoing
         
         #calculate a fraction of total market activity attributable to us.
         other_exec_quants = otherTrades[:, 1].sum()
@@ -1032,34 +1032,39 @@ class MarketMakingEnv(BaseLOBEnv):
         ) -> chex.Array:
         """ Return observation from raw state trafo. """
         # NOTE: only uses most recent observation from state
-        quote_aggr, quote_pass = jax.lax.cond(
-            state.is_sell_task,
-            lambda: (state.best_bids[-1], state.best_asks[-1]),
-            lambda: (state.best_asks[-1], state.best_bids[-1]),
-        )
+        #quote_aggr, quote_pass = jax.lax.cond(
+        #    state.is_sell_task,
+        #    lambda: (state.best_bids[-1], state.best_asks[-1]),
+        #    lambda: (state.best_asks[-1], state.best_bids[-1]),
+        #)
         time = state.time[0] + state.time[1]/1e9
         time_elapsed = time - (state.init_time[0] + state.init_time[1]/1e9)
         # print('prev_action_shape', state.prev_action.shape)
         ###NOTICE THIS
         sign_switch = 1
         obs = {
-            "is_sell_task": state.is_sell_task,
-            "p_aggr": quote_aggr[0] * sign_switch,  # switch sign for buy task
-            "p_pass": quote_pass[0] * sign_switch,  # switch sign for buy task
-            "spread": jnp.abs(quote_aggr[0] - quote_pass[0]),
-            "q_aggr": quote_aggr[1],
-            "q_pass": quote_pass[1],
-            "q_pass2": state.quant_passive_2,
+            #"is_sell_task": state.is_sell_task,
+            "p_bid" : state.best_bids[-1][0],  
+            "p_ask": state.best_asks[-1][0], 
+            "p_bid_passive" :  state.best_bids[-1][0] - self.tick_size*self.n_ticks_in_book,
+            "p_ask_passive" :  state.best_asks[-1][0] + self.tick_size*self.n_ticks_in_book,
+            "spread": jnp.abs(state.best_asks[-1][0] - state.best_bids[-1][0]),
+            "q_bid": state.best_bids[-1][1],
+            "q_ask": state.best_asks[-1][1],
+            "q_bid_passive": job.get_volume_at_price(state.bid_raw_orders, state.best_bids[-1][0] - self.tick_size*self.n_ticks_in_book),
+            "q_ask_passive" : job.get_volume_at_price(state.ask_raw_orders, state.best_asks[-1][0] + self.tick_size*self.n_ticks_in_book),
             # "q_before2": None, # how much quantity lies above this price level
             "time": time,
             "delta_time": state.delta_time,
             # "episode_time": state.time - state.init_time,
             "time_remaining": params.episode_time - time_elapsed,
+            "inventory" : state.inventory,
             "init_price": state.init_price,
             "mid_price":state.mid_price,
-            "task_size": state.task_to_execute,
+            "total_revenue" : state.total_revenue,
+            #"task_size": state.task_to_execute,
            # "executed_quant": state.quant_executed,
-            "remaining_quant": state.task_to_execute, #- state.quant_executed,
+            #"remaining_quant": state.task_to_execute, #- state.quant_executed,
             "step_counter": state.step_counter,
             "max_steps": state.max_steps_in_episode,
             # "remaining_ratio": 1. - jnp.nan_to_num(state.step_counter / state.max_steps_in_episode, nan=1.),
@@ -1067,6 +1072,9 @@ class MarketMakingEnv(BaseLOBEnv):
             "prev_action": state.prev_action[:, 1],  # use quants only
            # "prev_executed": state.prev_executed,  # use quants only
           #  "prev_executed_ratio": jnp.where(state.prev_action[:, 1]==0., 0., state.prev_executed / state.prev_action[:, 1]),
+            "useless" : 0,
+            "useless2" : 0,
+            #"useless3" : 0,
         }
         # jax.debug.print('prev_action {}', state.prev_action)
         # jax.debug.print('prev_executed {}', state.prev_executed)
@@ -1077,52 +1085,68 @@ class MarketMakingEnv(BaseLOBEnv):
         p_mean = 3.5e7
         p_std = 1e6
         means = {
-            "is_sell_task": 0,
-            "p_aggr": state.init_price * sign_switch, #p_mean,
-            "p_pass": state.init_price * sign_switch, #p_mean,
+            #"is_sell_task": 0,
+            "p_bid": state.mid_price,
+            "p_ask": state.mid_price,
+            "p_bid_passive" :  state.mid_price,
+            "p_ask_passive" :  state.mid_price,
             "spread": 0,
-            "q_aggr": 0,
-            "q_pass": 0,
-            "q_pass2": 0,
+            "q_bid": 0,
+            "q_ask": 0,
+            "q_bid_passive": 0,
+            "q_ask_passive" : 0,
             "time": 0,
             "delta_time": 0,
             # "episode_time": jnp.array([0, 0]),
             "time_remaining": 0,
+            "inventory" : 0,
             "init_price": 0, #p_mean,
             "mid_price":0,
-            "task_size": 0,
+            "total_revenue" : 0,
+            #"task_size": 0,
            # "executed_quant": 0,
-            "remaining_quant": 0,
+            #"remaining_quant": 0,
             "step_counter": 0,
             "max_steps": 0,
             "remaining_ratio": 0,
             "prev_action": 0,
            # "prev_executed": 0,
           #  "prev_executed_ratio": 0,
+            "useless" : 0,
+            "useless2" : 0,
+            #"useless3" : 0,
         }
         stds = {
-            "is_sell_task": 1,
-            "p_aggr": 1e5, #p_std,
-            "p_pass": 1e5, #p_std,
+            #"is_sell_task": 1,
+            "p_bid": 1e5, #p_std,
+            "p_ask": 1e5, #p_std,
+            "p_bid_passive" :  1e5,
+            "p_ask_passive" : 1e5,
             "spread": 1e4,
-            "q_aggr": 100,
-            "q_pass": 100,
-            "q_pass2": 100,
+            "q_bid": 100,
+            "q_ask": 100,
+            "q_bid_passive": 100,
+            "q_ask_passive" : 100,
             "time": 1e5,
             "delta_time": 10,
             # "episode_time": jnp.array([1e3, 1e9]),
             "time_remaining": self.sliceTimeWindow, # 10 minutes = 600 seconds
             "init_price": 1e7, #p_std,
             "mid_price": 1e7, #p_std,
-            "task_size": self.max_task_size,
+            "inventory" : 100,
+            "total_revenue" : 100,
+            #"task_size": self.max_task_size,
            # "executed_quant": self.max_task_size,
-            "remaining_quant": self.max_task_size,
+           # "remaining_quant": self.max_task_size,
             "step_counter": 30,  # TODO: find way to make this dependent on episode length
             "max_steps": 30,
             "remaining_ratio": 1,
             "prev_action": 10,
           #  "prev_executed": 10,
           #  "prev_executed_ratio": 1,
+            "useless" : 1,
+            "useless2" : 1,
+            #"useless3" : 1,
         }
         if normalize:
             obs = self.normalize_obs(obs, means, stds)
@@ -1318,11 +1342,11 @@ if __name__ == "__main__":
         
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
-        print('trades',state.trades)
-        print('revenue', state.total_revenue)
-        print('inventory',state.inventory)
-        print('reward',reward)
-        print(info['market_share'])
+        #print('trades',state.trades)
+        #print('revenue', state.total_revenue)
+        #print('inventory',state.inventory)
+        #print('reward',reward)
+        #print(info['market_share'])
         #for key, value in info.items():
            #print(key, value)
             
