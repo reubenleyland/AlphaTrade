@@ -372,6 +372,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "task_to_execute": state.task_to_execute,
            # "average_price": jnp.nan_to_num(state.total_revenue 
                                            # / state.quant_executed, 0.0),
+                                           
             "current_step": state.step_counter,
             "done": done,
            # "slippage_rm": state.slippage_rm,
@@ -387,7 +388,8 @@ class MarketMakingEnv(BaseLOBEnv):
             "market_share":extras["market_share"]
 
         }
-        #jax.debug.print('reset state {}',state)
+        
+        #jax.debug.print('done? {}',done)
         return self._get_obs(state, params), state, reward, done, info
     
 
@@ -416,13 +418,15 @@ class MarketMakingEnv(BaseLOBEnv):
         return obs, state
     
     def is_terminal(self, state: EnvState, params: EnvParams) -> bool:
+       # jax.debug.print("terminal? \n {}",params.episode_time - (state.time - state.init_time)[0])
         """ Check whether state is terminal. """
         if self.ep_type == 'fixed_time':
             # TODO: make the 5 sec a function of the step size
             return (
                 (params.episode_time - (state.time - state.init_time)[0] <= 5)  # time over (last 5 seconds)
-                
             )
+    
+        
         elif self.ep_type == 'fixed_steps':
             return (
                 (state.max_steps_in_episode - state.step_counter <= 1)  # last step
@@ -1012,7 +1016,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
         # ---------- normalize the reward ----------#
         # reward /= 10_000
-        reward_scaled = reward / 100_000
+        reward_scaled = reward / 100_000_000
         # reward /= params.avg_twap_list[state.window_index]
         return reward_scaled, {
             "market_share": market_share,
@@ -1072,9 +1076,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "prev_action": state.prev_action[:, 1],  # use quants only
            # "prev_executed": state.prev_executed,  # use quants only
           #  "prev_executed_ratio": jnp.where(state.prev_action[:, 1]==0., 0., state.prev_executed / state.prev_action[:, 1]),
-            "useless" : 0,
-            "useless2" : 0,
-            #"useless3" : 0,
+            
         }
         # jax.debug.print('prev_action {}', state.prev_action)
         # jax.debug.print('prev_executed {}', state.prev_executed)
@@ -1112,9 +1114,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "prev_action": 0,
            # "prev_executed": 0,
           #  "prev_executed_ratio": 0,
-            "useless" : 0,
-            "useless2" : 0,
-            #"useless3" : 0,
+        
         }
         stds = {
             #"is_sell_task": 1,
@@ -1144,9 +1144,6 @@ class MarketMakingEnv(BaseLOBEnv):
             "prev_action": 10,
           #  "prev_executed": 10,
           #  "prev_executed_ratio": 1,
-            "useless" : 1,
-            "useless2" : 1,
-            #"useless3" : 1,
         }
         if normalize:
             obs = self.normalize_obs(obs, means, stds)
@@ -1253,7 +1250,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """Observation space of the environment."""
         #space = spaces.Box(-10,10,(809,),dtype=jnp.float32) 
         # space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
-        space = spaces.Box(-10, 10, (23,), dtype=jnp.float32) 
+        space = spaces.Box(-10, 10, (27,), dtype=jnp.float32) 
         return space
 
     def state_space(self, params: EnvParams) -> spaces.Dict:
@@ -1292,7 +1289,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure", # "pure",
         "REWARD_LAMBDA": 1.0,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 120 * 5, # 60 seconds
+        "EPISODE_TIME": 60* 5, # 60 seconds
     }
         
     rng = jax.random.PRNGKey(0)
@@ -1327,7 +1324,7 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,10):
+    for i in range(1,100):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
@@ -1346,7 +1343,10 @@ if __name__ == "__main__":
         #print('revenue', state.total_revenue)
         #print('inventory',state.inventory)
         #print('reward',reward)
-        #print(info['market_share'])
+        #
+       # print("Reward: \n",reward)
+       # print("Time \n", state.time)
+        #print("Intial Time \n", state.init_time)
         #for key, value in info.items():
            #print(key, value)
             
@@ -1354,6 +1354,7 @@ if __name__ == "__main__":
         # print(f"Time for {i} step: \n",time.time()-start)
         if done:
             print("==="*20)
+            exit()
         # ---------- acion from random sampling ----------
         # ==================== ACTION ====================
 

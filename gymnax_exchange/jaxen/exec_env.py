@@ -1249,13 +1249,14 @@ if __name__ == "__main__":
         start=time.time()
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
+        print("Reward: \n",reward)
         #print(state.trades)
-        for key, value in info.items():
-            print(key, value)
-            print('is_sell_task', state.is_sell_task)
+        #for key, value in info.items():
+            #print(key, value)
+            #print('is_sell_task', state.is_sell_task)
             #print('trades',state.trades)
-            print('revenue', state.total_revenue)
-            print('reward',reward)
+           # print('revenue', state.total_revenue)
+         #   print('reward',reward)
         # print(f"State after {i} step: \n",state,done,file=open('output.txt','a'))
         # print(f"Time for {i} step: \n",time.time()-start)
         if done:

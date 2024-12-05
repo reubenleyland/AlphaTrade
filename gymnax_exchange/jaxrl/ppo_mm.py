@@ -179,7 +179,7 @@ def make_train(config):
             tx=tx,
         )
         
-        # jax.debug.breakpoint()
+        #jax.debug.breakpoint()
         # INIT ENV
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
@@ -220,7 +220,7 @@ def make_train(config):
                 log_prob = pi.log_prob(action // config["REDUCE_ACTION_SPACE_BY"])
 
                 # print('action {}, log_prob {}', action.shape, log_prob.shape)
-                # jax.debug.print('action {}, log_prob {}', action, log_prob)
+                #jax.debug.print('action {}, log_prob {}', action, log_prob)
 
                 value, action, log_prob = (
                     value.squeeze(0),
@@ -234,6 +234,8 @@ def make_train(config):
 
                 obsv_step, env_state_step, reward_step, done_step, info_step = jax.vmap(
                     env.step, in_axes=(0, 0, 0, None)
+                
+
                 )(rng_step, env_state, action, env_params)
                 transition = Transition(
                     done_step, action, value, reward_step, log_prob, last_obs, info_step
@@ -255,6 +257,8 @@ def make_train(config):
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state[:-1], col_noise, config["NUM_STEPS"]
             )
+            #jax.debug.print("traj_batch {}",traj_batch)
+            #jax.debug.breakpoint()
 
             # CALCULATE ADVANTAGE
             train_state, env_state, last_obs, last_done, hstate, rng = runner_state
@@ -271,7 +275,7 @@ def make_train(config):
                         transition.value,
                         transition.reward,
                     )
-                    # jax.debug.print('value {} reward {}', value, reward)
+                    #jax.debug.print('value {} reward {}', value, reward)
                     delta = reward + config["GAMMA"] * next_value * (1 - done) - value
                     gae = (
                         delta
@@ -289,12 +293,15 @@ def make_train(config):
                 return advantages, advantages + traj_batch.value
 
             advantages, targets = _calculate_gae(traj_batch, last_val)
-
+            #jax.debug.print('advantages {} targets {}', advantages, targets)
+            #jax.debug.breakpoint()
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
                 def _update_minbatch(train_state, batch_info):
                     train_state, _ = train_state
                     init_hstate, traj_batch, advantages, targets = batch_info
+                    #jax.debug.print("returned_episode: {}", traj_batch.info['returned_episode'])
+                    #jax.debug.breakpoint()
 
                     # TODO: currently only captures output of ScannedRNN instead of both GRU layers
                     def _dead_neuron_ratio(activations):
@@ -379,7 +386,7 @@ def make_train(config):
                         # norm of trajectory batch observation
                         obs_norm = jnp.sqrt((traj_batch.obs**2).sum(axis=-1)).mean()
                         # jax.debug.print('_scale_diag {}', pi._scale_diag.squeeze()[-1].shape)
-                        # jax.debug.print('obs_norm: {}', obs_norm)
+                        #jax.debug.print('obs_norm: {}', obs_norm)
                         
                         # action_mean = (
                         #     pi._loc.squeeze()[-1] if config["CONT_ACTIONS"]
@@ -442,9 +449,11 @@ def make_train(config):
                             action_mean,
                             action_std,
                         )
+                        #jax.debug.print('traj_batchinfo: {}', traj_batch.info)
+                       # jax.debug.breakpoint()
                         if wandbOn:
                             jax.debug.callback(debug_log, metric)
-                        # jax.debug.print('obs_norm: {}', obs_norm)
+                        
                         # jax.debug.breakpoint()
 
                         # CALCULATE VALUE LOSS
@@ -540,12 +549,14 @@ def make_train(config):
                 rng, _rng = jax.random.split(rng)
                 permutation = jax.random.permutation(_rng, config["NUM_ENVS"])
                 batch = (init_hstate, traj_batch, advantages, targets)
-                # jax.debug.print('traj_batch {}', traj_batch.obs.shape)
+                #jax.debug.print('traj_batch.info {}', traj_batch.info)
+                #jax.debug.breakpoint()
+
 
                 shuffled_batch = jax.tree_util.tree_map(
                     lambda x: jnp.take(x, permutation, axis=1), batch
                 )
-                # jax.debug.print('shuffled_batch {}', shuffled_batch[1].obs.shape)
+               # jax.debug.print('shuffled_batch {}', shuffled_batch[1].obs.shape)
 
                 minibatches = jax.tree_util.tree_map(
                     lambda x: jnp.swapaxes(
@@ -559,7 +570,7 @@ def make_train(config):
                     ),
                     shuffled_batch,
                 )
-                # jax.debug.print('minibatches {}', minibatches[1].obs.shape)
+                #jax.debug.print('minibatches {}', minibatches[1].obs.shape)
 
                 (train_state, grad_norm), total_loss = jax.lax.scan(
                     _update_minbatch, (train_state, jnp.zeros(4,)), minibatches
@@ -617,23 +628,28 @@ def make_train(config):
             metric = (update_step, traj_batch.info, trainstate_logs, train_state.params)
             rng = update_state[5]
 
-            # print(traj_batch.info['timestep'])
+            #print(traj_batch.info)
             # print()
-            # print(traj_batch.info['returned_episode'])
+            #print(traj_batch.info['returned_episode'])
+            #print(traj_batch.info['returned_episode'])
             # print()
 
-            # jax.debug.print("timestep: {}", traj_batch.info['timestep'])
-            # jax.debug.print("returned_episode: {}", traj_batch.info['returned_episode'])
+            #jax.debug.print("timestep: {}", traj_batch.info['timestep'])
+            #jax.debug.print("returned_episode: {}", traj_batch.info['returned_episode'])
 
             if config.get("DEBUG"):
 
                 def callback(metric):
                     
                     update_step, info, trainstate_logs, trainstate_params = metric
-                    
-                    return_values = info["returned_episode_returns"][
-                        info["returned_episode"]
-                    ]
+                    ##make these just the returns even if not done?
+                    #return_values = info["returned_episode_returns"][
+                     #   info["returned_episode"]
+                    #]
+                    return_values = info["returned_episode_returns"]
+                    revenues = info["total_revenue"]
+
+
                     timesteps = (
                         info["timestep"][info["returned_episode"]] * config["NUM_ENVS"]
                     )
@@ -651,7 +667,7 @@ def make_train(config):
                             jax.debug.print("+++ time taken        {}",time.time()-start)        
                     evaluation()
                     
-                    revenues = info["total_revenue"][info["returned_episode"]]
+                    #revenues = info["total_revenue"][info["returned_episode"]]
                     #quant_executed = info["quant_executed"][info["returned_episode"]]
                     #average_price = info["average_price"][info["returned_episode"]]
                     
@@ -674,9 +690,12 @@ def make_train(config):
                     # if info['done']: print("==="*10 + str(info["window_index"])[0,0] + "==="*10 + '\n')      
                     # print(info["total_revenue"])  
                     # print(info["quant_executed"])   
-                    # print(info["average_price"])   
+                        
                     # print(info["returned_episode_returns"])
                     '''
+                    #print(timesteps)
+                    #print(return_values)
+                    #print(revenues)
                     
                     # '''
                     # NOTE: only log every 100th timestep
@@ -686,16 +705,16 @@ def make_train(config):
                         wandb.log(
                             data={
                                 "update_step": update_step,
-                                "global_step": jnp.max(timesteps), # timesteps[t],
-                                "episodic_return": jnp.mean(return_values), #return_values[t],
-                                "episodic_revenue": jnp.mean(revenues), #revenues[t],
+                                "global_step": jnp.max(timesteps) if timesteps.size > 0 else 0, # timesteps[t],
+                                "episodic_return": jnp.mean(return_values) if return_values.size > 0 else 0,  # Handle empty arrays
+                                "episodic_revenue": jnp.mean(revenues) if revenues.size > 0 else 0,  # Handle empty arrays
                                 #"quant_executed": jnp.mean(quant_executed), #quant_executed[t],
                                 #"average_price": jnp.mean(average_price), #average_price[t],
                                 # "slippage_rm":slippage_rm[t],
                                 # "price_adv_rm":price_adv_rm[t],
                                 # "price_drift_rm":price_drift_rm[t],
                                 # "vwap_rm":vwap_rm[t],
-                                "current_step": jnp.mean(current_step), #current_step[t],
+                                #"current_step": jnp.mean(current_step), #current_step[t],
                                 #"advantage_reward": jnp.mean(advantage_reward), #advantage_reward[t],
                                 #"drift_reward": jnp.mean(drift_reward), #drift_reward[t],
                                 ##"mkt_forced_quant": jnp.mean(mkt_forced_quant), #mkt_forced_quant[t],
@@ -751,8 +770,8 @@ if __name__ == "__main__":
         "ENT_COEF": 0., # 0., 0.001, 0, 0.1, 0.01, 0.001
         "NUM_ENVS": 256, #512, 1024, #128, #64, 1000,
         "TOTAL_TIMESTEPS": 2e6,  # 1e8, 5e7, # 50MIL for single data window convergence #,1e8,  # 6.9h
-        "NUM_MINIBATCHES": 4, #8, 4, 2,
-        "UPDATE_EPOCHS": 10, #10, 30, 5,
+        "NUM_MINIBATCHES": 2, #8, 4, 2,
+        "UPDATE_EPOCHS": 5, #10, 30, 5,
         "NUM_STEPS": 10, #20, 512, 500,
         "CLIP_EPS": 0.2,  # TODO: should we change this to a different value? 
         
@@ -778,7 +797,7 @@ if __name__ == "__main__":
         "DEBUG": True,
         
         "TASKSIDE": "random", # "random", "buy", "sell"
-        "REWARD_LAMBDA": 1., #0.001,
+        "REWARD_LAMBDA": .1, #0.001,
         "ACTION_TYPE": "pure", # "delta"
         "MAX_TASK_SIZE": 100,
         "TASK_SIZE": 100, # 500,
@@ -789,7 +808,7 @@ if __name__ == "__main__":
         "ACTOR_STD": "state_dependent",  # 'state_dependent', 'param', 'fixed'
         "REDUCE_ACTION_SPACE_BY": 10,
       
-        "ATFOLDER": "/home/duser/AlphaTrade/gymnax_exchange/jaxen/training_oneDay", #"/homes/80/kang/AlphaTrade/training_oneDay/",
+        "ATFOLDER": "/home/duser/AlphaTrade/training_oneDay", #"/homes/80/kang/AlphaTrade/training_oneDay/",
         # "ATFOLDER": "./training_oneMonth/", #"/homes/80/kang/AlphaTrade/training_oneDay/",
         "RESULTS_FILE": "training_runs/results_file_"+f"{timestamp}",  # "/homes/80/kang/AlphaTrade/results_file_"+f"{timestamp}",
         "CHECKPOINT_DIR": "training_runs/checkpoints_"+f"{timestamp}",  # "/homes/80/kang/AlphaTrade/checkpoints_"+f"{timestamp}",
