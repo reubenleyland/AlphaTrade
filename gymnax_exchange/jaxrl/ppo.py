@@ -789,7 +789,7 @@ if __name__ == "__main__":
         "ACTOR_STD": "state_dependent",  # 'state_dependent', 'param', 'fixed'
         "REDUCE_ACTION_SPACE_BY": 10,
       
-        "ATFOLDER": "/home/duser/AlphaTrade/gymnax_exchange/jaxen/training_oneDay", #"/homes/80/kang/AlphaTrade/training_oneDay/",
+        "ATFOLDER": "/home/duser/AlphaTrade/training_oneDay", #"/homes/80/kang/AlphaTrade/training_oneDay/",
         # "ATFOLDER": "./training_oneMonth/", #"/homes/80/kang/AlphaTrade/training_oneDay/",
         "RESULTS_FILE": "training_runs/results_file_"+f"{timestamp}",  # "/homes/80/kang/AlphaTrade/results_file_"+f"{timestamp}",
         "CHECKPOINT_DIR": "training_runs/checkpoints_"+f"{timestamp}",  # "/homes/80/kang/AlphaTrade/checkpoints_"+f"{timestamp}",

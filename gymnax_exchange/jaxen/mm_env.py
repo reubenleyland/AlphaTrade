@@ -172,7 +172,7 @@ class EnvParams(BaseEnvParams):
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=.1, ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=.01, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -961,15 +961,17 @@ class MarketMakingEnv(BaseLOBEnv):
         mask2 = (self.trader_unique_id == executed[:, 6]) | (self.trader_unique_id == executed[:, 7]) #Mask to find trader ID
         agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
         otherTrades = jnp.where(mask2[:, jnp.newaxis], 0, executed)
-
+        #jax.debug.print("agentTrades: {}", agentTrades)
 
 
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
         #Logic: Q>0, TIDs=BUY; Q<0 TIDa= BUY
         mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == executed[:, 7])))
+        mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == executed[:, 7])))
+        #jax.debug.print("mask_buy: {}", mask_buy)
         agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
-        agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, agentTrades)
+        agent_sells=jnp.where(mask_sell[:, jnp.newaxis], agentTrades, 0)
 
         #jax.debug.print("Agent Buys: {}", agent_buys)
         #jax.debug.print("Agent Sells: {}", agent_sells)
@@ -983,46 +985,55 @@ class MarketMakingEnv(BaseLOBEnv):
 
         #Calculate the change in inventory & the new inventory
         inventory_delta = buyQuant - sellQuant
-        inventory=state.inventory+inventory_delta
+        new_inventory=state.inventory+inventory_delta
 
-       
+        #jax.lax.cond()
         #Find the new obsvered mid price at the end of the step.
+        #Note: to make integer of tick_size // is integer division.
         mid_price_end = (state.best_bids[-1][0] + state.best_asks[-1][0]) // 2 // self.tick_size * self.tick_size
            
         #Inventory PnL: 
-        InventoryPnL=inventory*mid_price_end-state.inventory*state.mid_price
-
+        InventoryPnL= (new_inventory*mid_price_end-state.inventory*state.mid_price) / self.tick_size
+        #jax.debug.print("InventoryPnL {}", InventoryPnL)
         #Market Making PNL:
         ##This bit gets some design choices. make average?       
         averageMidprice = ((state.best_bids + state.best_asks) // 2).mean() // self.tick_size * self.tick_size
         
         #TODO:Real PnL??+weighted inventory PnL
-        buyPnL = ((averageMidprice - agent_buys[:, 0]) * agent_buys[:, 1]).sum() / self.tick_size
-        sellPnL = ((agent_sells[:, 0] - averageMidprice) * agent_sells[:, 1]).sum() / self.tick_size
+        buyPnL = ((averageMidprice - agent_buys[:, 0]) * jnp.abs(agent_buys[:, 1])).sum() / self.tick_size
+        sellPnL = ((agent_sells[:, 0] - averageMidprice) * jnp.abs(agent_sells[:, 1])).sum() / self.tick_size
 
-            
+        #jax.debug.print("buyPnL {}", buyPnL)
+        #jax.debug.print("sellPnL {}", sellPnL)  
         #make the rewards a damped version of the inventory to discourage holding inventory
-        reward=buyPnL+sellPnL+self.rewardLambda*InventoryPnL
+        reward=buyPnL+sellPnL-self.rewardLambda*jnp.maximum(0,InventoryPnL)
         undamped_reward=buyPnL+sellPnL+InventoryPnL
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
-        income=(agent_sells[:, 0]* agent_sells[:, 1]).sum() / self.tick_size
-        outgoing=(agent_buys[:, 0] * agent_buys[:, 1]).sum() / self.tick_size
+        income=(agent_sells[:, 0]* jnp.abs(agent_sells[:, 1])).sum() / self.tick_size
+        outgoing=(agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / self.tick_size
+        #jax.debug.print("agent_sells_price {}",agent_sells[:, 0])
+        #jax.debug.print("agent_sell_quant {}",jnp.abs(agent_sells[:, 1]))
+        #jax.debug.print("agent_buys_quant {}",jnp.abs(agent_buys[:, 1]))
+
+        #jax.debug.print("Income {}",income)
+        #jax.debug.print("outgoing {}",outgoing)
+        #jax.debug.print("Reward {}",reward)
         revenue=income-outgoing
         
         #calculate a fraction of total market activity attributable to us.
-        other_exec_quants = otherTrades[:, 1].sum()
+        other_exec_quants = jnp.abs(otherTrades[:, 1]).sum()
         market_share = TradedVolume / (TradedVolume + other_exec_quants)
 
         # ---------- normalize the reward ----------#
         # reward /= 10_000
-        reward_scaled = reward / 100_000_000
+        reward_scaled = reward / 100_000
         # reward /= params.avg_twap_list[state.window_index]
         return reward_scaled, {
             "market_share": market_share,
             "undamped_reward":undamped_reward,
             "revenue": revenue / 100_000,  # pure revenue is not informative if direction is random (-> flip and normalise)
-            "end_inventory":inventory,
+            "end_inventory":new_inventory,
             "mid_price":mid_price_end,
             "agentQuant":inventory_delta
         }
@@ -1324,7 +1335,7 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,100):
+    for i in range(1,10):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
@@ -1339,7 +1350,7 @@ if __name__ == "__main__":
         
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
-        #print('trades',state.trades)
+        print('revenue',state.total_revenue)
         #print('revenue', state.total_revenue)
         #print('inventory',state.inventory)
         #print('reward',reward)
