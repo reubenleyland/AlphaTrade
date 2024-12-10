@@ -158,10 +158,12 @@ class EnvState(BaseEnvState):
     #price_adv_rm: float
     #price_drift_rm: float
     #vwap_rm: float
-    is_sell_task: int
+   #  is_sell_task: int
     trade_duration: float
-    quant_passive_2: int
-    price_passive_2: int
+    bid_passive_2 :int
+    quant_bid_passive_2 :int
+    ask_passive_2:int
+    quant_ask_passive_2:int
     delta_time: float
 
 @struct.dataclass
@@ -227,22 +229,36 @@ class MarketMakingEnv(BaseLOBEnv):
         action_prices = action_msgs[:, 3]
      
         #jax.debug.print('action_msgs\n {}', action_msgs)
-
-        raw_order_side = jax.lax.cond(
-            state.is_sell_task,
-            lambda: state.ask_raw_orders,
-            lambda: state.bid_raw_orders
-        )
-        cnl_msgs = job.getCancelMsgs(
-            raw_order_side,
+        #Need cancel messages for bid and for ask:
+        cnl_msg_bid = job.getCancelMsgs(
+            state.bid_raw_orders,
             job.INITID + 1,
-            self.n_actions,  # max number of orders to cancel
-            1 - state.is_sell_task * 2
+            self.n_actions//2, 
+            1  # bids
         )
-        
+        cnl_msg_ask = job.getCancelMsgs(
+            state.ask_raw_orders,
+            job.INITID + 1,
+            self.n_actions//2,
+            -1  # ask side
+        )
+        cnl_msgs = jnp.concatenate([cnl_msg_bid, cnl_msg_ask], axis=0)
+       # raw_order_side = jax.lax.cond(
+        #    state.is_sell_task,
+         #   lambda: state.ask_raw_orders,
+         #   lambda: state.bid_raw_orders
+        #)#
+        #cnl_msgs = job.getCancelMsgs(
+           # raw_order_side,
+          #  job.INITID + 1,
+           # self.n_actions,  # max number of orders to cancel
+           # 1 - state.is_sell_task * 2
+       # )
+       
+        #jax.debug.print('cnl_msgs\n {}', cnl_msgs)
         # net actions and cancellations at same price if new action is not bigger than cancellation
         action_msgs, cnl_msgs = self._filter_messages(action_msgs, cnl_msgs)
-        #jax.debug.print('filtered action_msgs\n {}', action_msgs)
+       # jax.debug.print('filtered action_msgs\n {}', action_msgs)
         
         # Add to the top of the data messages
         total_messages = jnp.concatenate([cnl_msgs, action_msgs, data_messages], axis=0)
@@ -283,19 +299,19 @@ class MarketMakingEnv(BaseLOBEnv):
         mask2 = (self.trader_unique_id == executed[:, 6]) | (self.trader_unique_id == executed[:, 7]) #Mask to find trader ID
         agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
        
-
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
         #Logic: q>0, TIDs=BUY; Q<0 TIDa= BUY
-        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == executed[:, 7])))
+        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == agentTrades[:, 7])))
+        mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == agentTrades[:, 7])))
 
-        agent_buys=jnp.where(mask_buy[:, jnp.newaxis], executed, 0)
-        agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, executed)
+        agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
+        agent_sells=jnp.where(mask_sell[:, jnp.newaxis], agentTrades, 0)
 
         buyQuant=jnp.abs(agent_buys[:, 1]).sum()
         sellQuant=jnp.abs(agent_sells[:, 1]).sum()
 
-        #totalQuant_step=buyQuant+sellQuant
+        totalQuant_step=buyQuant+sellQuant
         quant_left = state.task_to_execute
         
         #jax.debug.print('agent_trades\n {}', agent_trades[:30])
@@ -314,7 +330,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
         # jax.debug.print("bestasks\n {}", bestasks)
         
-        price_passive_2, quant_passive_2 = self._get_pass_price_quant(state)
+        bid_passive_2,quant_bid_passive_2,ask_passive_2,quant_ask_passive_2 = self._get_pass_price_quant(state)
         #jax.debug.print('price_passive_2: {}, quant_passive_2: {}', price_passive_2, quant_passive_2)
         # TODO: consider adding quantity before (in priority) to each price / level
 
@@ -358,10 +374,12 @@ class MarketMakingEnv(BaseLOBEnv):
             #price_adv_rm = extras["price_adv_rm"],
             #price_drift_rm = extras["price_drift_rm"],
             #vwap_rm = extras["vwap_rm"],
-            is_sell_task = state.is_sell_task,
+            #is_sell_task = state.is_sell_task,
             trade_duration = trade_duration,
-            price_passive_2 = price_passive_2,
-            quant_passive_2 = quant_passive_2,
+            bid_passive_2 = bid_passive_2,
+            quant_bid_passive_2 = quant_bid_passive_2,
+            ask_passive_2=ask_passive_2,
+            quant_ask_passive_2=quant_ask_passive_2,            
             delta_time = new_time[0] + new_time[1]/1e9 - state.time[0] - state.time[1]/1e9,
         )
         done = self.is_terminal(state, params)
@@ -384,7 +402,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "trade_duration": state.trade_duration,
             "mkt_forced_quant": mkt_exec_quant + doom_quant,
             "doom_quant": doom_quant,
-            "is_sell_task": state.is_sell_task,
+           # "is_sell_task": state.is_sell_task,
             "market_share":extras["market_share"]
 
         }
@@ -401,18 +419,19 @@ class MarketMakingEnv(BaseLOBEnv):
         """ Reset the environment to init state (pre computed from data)."""
         key_, key = jax.random.split(key)
         _, state = super().reset_env(key, params)
-        if self.task == 'random':
-            direction = jax.random.randint(key_, minval=0, maxval=2, shape=())
-        else:
-            direction = 0 if self.task == 'buy' else 1
+       #Below removed as part of removing state.is_sell_task
+       # if self.task == 'random':
+        #    direction = jax.random.randint(key_, minval=0, maxval=2, shape=())
+        #else:
+         #   direction = 0 if self.task == 'buy' else 1
             
-        state = dataclasses.replace(state, is_sell_task=direction)
+        #state = dataclasses.replace(state, is_sell_task=direction)
 
         # update passive prices and quants depending on task direction
         # (other features are independent)
         # TODO: save passive prices and quants on both sides and handle this in _get_obs
-        price_passive_2, quant_passive_2 = self._get_pass_price_quant(state)
-        state = dataclasses.replace(state, price_passive_2=price_passive_2, quant_passive_2=quant_passive_2)
+        bid_passive_2,quant_bid_passive_2,ask_passive_2,quant_ask_passive_2 = self._get_pass_price_quant(state)
+        state = dataclasses.replace(state, bid_passive_2=bid_passive_2, quant_bid_passive_2=quant_bid_passive_2,ask_passive_2=ask_passive_2,quant_ask_passive_2=quant_ask_passive_2)
 
         obs = self._get_obs(state, params)
         return obs, state
@@ -446,19 +465,22 @@ class MarketMakingEnv(BaseLOBEnv):
     #     return price_passive_2, quant_passive_2
     
     def _get_pass_price_quant(self, state):
-        price_passive_2 = jax.lax.cond(
-            state.is_sell_task,
-            lambda: state.best_asks[-1, 0] + self.tick_size * self.n_ticks_in_book,
-            lambda: state.best_bids[-1, 0] - self.tick_size * self.n_ticks_in_book
-        )
-        orders = jax.lax.cond(
-            state.is_sell_task,
-            lambda: state.ask_raw_orders,
-            lambda: state.bid_raw_orders
-        )
-        # quantity at second passive price level in the book
-        quant_passive_2 = job.get_volume_at_price(orders, price_passive_2)
-        return price_passive_2, quant_passive_2
+        bid_passive_2=state.best_bids[-1, 0] - self.tick_size * self.n_ticks_in_book
+        ask_passive_2=state.best_asks[-1, 0] + self.tick_size * self.n_ticks_in_book
+        #price_passive_2 = jax.lax.cond(
+         #   state.is_sell_task,
+          #  lambda: state.best_asks[-1, 0] + self.tick_size * self.n_ticks_in_book,
+           # lambda: state.best_bids[-1, 0] - self.tick_size * self.n_ticks_in_book
+        #)
+      #  orders = jax.lax.cond(
+       #     state.is_sell_task,
+        #    lambda: state.ask_raw_orders,
+         #   lambda: state.bid_raw_orders
+        #)
+        # quantity at second passive price level in the 
+        quant_bid_passive_2 = job.get_volume_at_price(state.bid_raw_orders, bid_passive_2)
+        quant_ask_passive_2 = job.get_volume_at_price(state.ask_raw_orders, ask_passive_2)
+        return bid_passive_2,quant_bid_passive_2,ask_passive_2,quant_ask_passive_2
     
     def _get_state_from_data(self,first_message,book_data,max_steps_in_episode,window_index,start_index):
         #(self,message_data,book_data,max_steps_in_episode)
@@ -467,7 +489,7 @@ class MarketMakingEnv(BaseLOBEnv):
         best_ask, best_bid = job.get_best_bid_and_ask_inclQuants(base_state.ask_raw_orders,base_state.bid_raw_orders)
         M = (best_bid[0] + best_ask[0]) // 2 // self.tick_size * self.tick_size 
         # if task is 'random', this will be randomly picked at env reset
-        is_sell_task = 0 if self.task == 'buy' else 1 # if self.task == 'random', set defualt as 0
+        #is_sell_task = 0 if self.task == 'buy' else 1 # if self.task == 'random', set defualt as 0
         # HERE...
 
         return EnvState(
@@ -488,11 +510,13 @@ class MarketMakingEnv(BaseLOBEnv):
             #price_adv_rm=0.,
             #price_drift_rm=0.,
             #vwap_rm=0.,
-            is_sell_task=is_sell_task, # updated on reset
+           # is_sell_task=is_sell_task, # updated on reset
             trade_duration=0.,
             # updated on reset:
-            quant_passive_2=0,
-            price_passive_2=0,
+            bid_passive_2 = 0,
+            quant_bid_passive_2 = 0,
+            ask_passive_2=0,
+            quant_ask_passive_2=0,
             delta_time=0.,
         )
 
@@ -645,16 +669,17 @@ class MarketMakingEnv(BaseLOBEnv):
             using previous actions. (0 actions are skipped)
             NOTE: this will not work for aggressive orders eating through the book (size limited by actions)
             TODO: make this more general for aggressive actions?
+            UPDATE FOR MM_Env: leave in order?
         """
-        is_sell_task = state.is_sell_task
+       # is_sell_task = state.is_sell_task
         price_quants = self._get_executed_by_price(agent_trades)
         # sort from aggr to passive
         price_quants = jax.lax.cond(
-            is_sell_task,
+           # is_sell_task,
             lambda: price_quants,
             lambda: price_quants[::-1],  # for buy task, most aggressive is highest price
         )
-        # put executions in non-zero action places (keeping the order)
+        #put executions in non-zero action places (keeping the order)
         price_quants = price_quants[jnp.argsort(jnp.argsort(actions <= 0))]
         return price_quants
     
@@ -664,12 +689,12 @@ class MarketMakingEnv(BaseLOBEnv):
             Aggressive quantities at FT and more passive are summed as the first quantity.
         """
         best_price = jax.lax.cond(
-            state.is_sell_task,
+           # state.is_sell_task,
             lambda: state.best_bids[-1, 0],
             lambda: state.best_asks[-1, 0]
         )
         aggr_trades_mask = jax.lax.cond(
-            state.is_sell_task,
+           # state.is_sell_task,
             lambda: agent_trades[:, 0] <= best_price,
             lambda: agent_trades[:, 0] >= best_price
         )
@@ -692,7 +717,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # jax.debug.print('price_quants_pass\n {}', price_quants_pass)
         # sort from aggr to passive
         price_quants = jax.lax.cond(
-            state.is_sell_task,
+          #  state.is_sell_task,
             lambda: price_quants_pass,
             lambda: price_quants_pass[::-1],  # for buy task, most aggressive is highest price
         )
@@ -717,8 +742,10 @@ class MarketMakingEnv(BaseLOBEnv):
 
             quants = action.astype(jnp.int32)
             #what is going on here?
-            prices = jnp.array(price_levels[:-1])
+            #prices = jnp.array(price_levels[:-1])
 
+
+            #Possibly need to do this for mm??
             if self.n_actions == 4:
                 # if mid_price == near_touch_price: combine orders into one
                 return jax.lax.cond(
@@ -832,7 +859,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # --------------- 03 Limit/Market Order (prices/qtys) ---------------
         action_msgs = jnp.stack([types, sides, quants, prices, trader_ids, order_ids], axis=1)
         action_msgs = jnp.concatenate([action_msgs, times],axis=1)
-        # jax.debug.print('action_msgs\n {}', action_msgs)
+        jax.debug.print('action_msgs\n {}', action_msgs)
         return action_msgs
         # ============================== Get Action_msgs ==============================
 
@@ -929,8 +956,9 @@ class MarketMakingEnv(BaseLOBEnv):
         quant_still_left = quant_left - mkt_exec_quant
         # jax.debug.print('quant_still_left: {}', quant_still_left)
         # assume doom price with 25% extra cost
+        is_sell_task = jnp.where(state.inventory > 0, 1, 0)
         doom_price = jax.lax.cond(
-            state.is_sell_task,
+            is_sell_task,
             lambda: ((0.75 * bestbid[0]) // self.tick_size * self.tick_size).astype(jnp.int32),
             lambda: ((1.25 * bestask[0]) // self.tick_size * self.tick_size).astype(jnp.int32),
         )
@@ -967,13 +995,13 @@ class MarketMakingEnv(BaseLOBEnv):
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
         #Logic: Q>0, TIDs=BUY; Q<0 TIDa= BUY
-        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == executed[:, 7])))
-        mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == executed[:, 7])))
+        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == agentTrades[:, 7])))
+        mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == agentTrades[:, 7])))
         #jax.debug.print("mask_buy: {}", mask_buy)
         agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
         agent_sells=jnp.where(mask_sell[:, jnp.newaxis], agentTrades, 0)
 
-        #jax.debug.print("Agent Buys: {}", agent_buys)
+       # jax.debug.print("Agent Buys: {}", agent_buys)
         #jax.debug.print("Agent Sells: {}", agent_sells)
 
         #Find amount bought and sold in the step
@@ -1075,13 +1103,13 @@ class MarketMakingEnv(BaseLOBEnv):
             #"is_sell_task": state.is_sell_task,
             "p_bid" : state.best_bids[-1][0],  
             "p_ask": state.best_asks[-1][0], 
-            "p_bid_passive" :  state.best_bids[-1][0] - self.tick_size*self.n_ticks_in_book,
-            "p_ask_passive" :  state.best_asks[-1][0] + self.tick_size*self.n_ticks_in_book,
+            "p_bid_passive" :  state.bid_passive_2,
+            "p_ask_passive" :  state.ask_passive_2,
             "spread": jnp.abs(state.best_asks[-1][0] - state.best_bids[-1][0]),
             "q_bid": state.best_bids[-1][1],
             "q_ask": state.best_asks[-1][1],
-            "q_bid_passive": job.get_volume_at_price(state.bid_raw_orders, state.best_bids[-1][0] - self.tick_size*self.n_ticks_in_book),
-            "q_ask_passive" : job.get_volume_at_price(state.ask_raw_orders, state.best_asks[-1][0] + self.tick_size*self.n_ticks_in_book),
+            "q_bid_passive": state.quant_bid_passive_2,
+            "q_ask_passive" : state.quant_ask_passive_2,
             # "q_before2": None, # how much quantity lies above this price level
             "time": time,
             "delta_time": state.delta_time,
@@ -1177,6 +1205,8 @@ class MarketMakingEnv(BaseLOBEnv):
             obs, _ = jax.flatten_util.ravel_pytree(obs)
         return obs
 
+
+##BELOW HAS NOT BEEN UPDATED FOR MM_ENV
     def _get_obs_full(self, state: EnvState, params:EnvParams) -> chex.Array:
         """Return observation from raw state trafo."""
         # Note: uses entire observation history between steps
@@ -1186,7 +1216,7 @@ class MarketMakingEnv(BaseLOBEnv):
         best_ask_qtys, best_bid_qtys = state.best_asks[:,1], state.best_bids[:,1]
         
         obs = {
-            "is_sell_task": state.is_sell_task,
+            #"is_sell_task": state.is_sell_task,
             "p_aggr": jnp.where(state.is_sell_task, best_bids, best_asks),
             "q_aggr": jnp.where(state.is_sell_task, best_bid_qtys, best_ask_qtys), 
             "p_pass": jnp.where(state.is_sell_task, best_asks, best_bids),
