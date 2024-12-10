@@ -393,6 +393,7 @@ class MarketMakingEnv(BaseLOBEnv):
                                            
             "current_step": state.step_counter,
             "done": done,
+            "inventory": state.inventory,
            # "slippage_rm": state.slippage_rm,
            # "price_adv_rm": state.price_adv_rm,
            # "price_drift_rm": state.price_drift_rm,
@@ -859,7 +860,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # --------------- 03 Limit/Market Order (prices/qtys) ---------------
         action_msgs = jnp.stack([types, sides, quants, prices, trader_ids, order_ids], axis=1)
         action_msgs = jnp.concatenate([action_msgs, times],axis=1)
-        jax.debug.print('action_msgs\n {}', action_msgs)
+        #jax.debug.print('action_msgs\n {}', action_msgs)
         return action_msgs
         # ============================== Get Action_msgs ==============================
 
@@ -1044,11 +1045,10 @@ class MarketMakingEnv(BaseLOBEnv):
 
         #reward=buyPnL+sellPnL + InventoryPnL - (1-self.rewardLambda)*jnp.maximum(0,InventoryPnL) # Asymmetrically dampened PnL
 
-        #More complex reward function:
+        #More complex reward function (should be added as part of the env if we actually use them):
         #inventoryPnL_lambda = 0.0001
         #unrealizedPnL_lambda = 0.5
         #asymmetry_lambda = 0.5
-
         #avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / buyQuant, 0)
         #avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0] * jnp.abs(agent_sells[:, 1])).sum() / sellQuant, 0)
         #approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price)
@@ -1058,7 +1058,6 @@ class MarketMakingEnv(BaseLOBEnv):
         #    jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice)  # Excess sells
         #)
         #reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl + inventoryPnL_lambda * (asymmetry_lambda*jnp.maximum(0,InventoryPnL))
-        #reward = approx_realized_pnl + self.rewardLambda * InventoryPnL
 
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)

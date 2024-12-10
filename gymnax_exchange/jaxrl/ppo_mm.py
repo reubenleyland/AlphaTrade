@@ -648,6 +648,7 @@ def make_train(config):
                     #]
                     return_values = info["returned_episode_returns"]
                     revenues = info["total_revenue"]
+                    inventories = info["inventory"] 
 
 
                     timesteps = (
@@ -708,6 +709,7 @@ def make_train(config):
                                 "global_step": jnp.max(timesteps) if timesteps.size > 0 else 0, # timesteps[t],
                                 "episodic_return": jnp.mean(return_values) if return_values.size > 0 else 0,  # Handle empty arrays
                                 "episodic_revenue": jnp.mean(revenues) if revenues.size > 0 else 0,  # Handle empty arrays
+                                "inventory": jnp.mean(inventories) if inventories.size > 0 else 0, 
                                 #"quant_executed": jnp.mean(quant_executed), #quant_executed[t],
                                 #"average_price": jnp.mean(average_price), #average_price[t],
                                 # "slippage_rm":slippage_rm[t],
