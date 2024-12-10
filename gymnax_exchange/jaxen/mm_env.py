@@ -172,7 +172,7 @@ class EnvParams(BaseEnvParams):
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=.01, ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=.0001, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -1005,9 +1005,23 @@ class MarketMakingEnv(BaseLOBEnv):
 
         #jax.debug.print("buyPnL {}", buyPnL)
         #jax.debug.print("sellPnL {}", sellPnL)  
-        #make the rewards a damped version of the inventory to discourage holding inventory
-        reward=buyPnL+sellPnL-self.rewardLambda*jnp.maximum(0,InventoryPnL)
+
+        # Multiply PnL from inventory with small lambda to dampen the effect
+        reward=buyPnL+sellPnL +  self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
+
+        # Other versions of reward
+        #reward=buyPnL+sellPnL + InventoryPnL # full speculation
+        #reward=buyPnL+sellPnL 
         undamped_reward=buyPnL+sellPnL+InventoryPnL
+
+        #reward=buyPnL+sellPnL + InventoryPnL - (1-self.rewardLambda)*jnp.maximum(0,InventoryPnL) # Asymmetrically dampened PnL
+
+        #avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / buyQuant, 0)
+        #avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0] * jnp.abs(agent_sells[:, 1])).sum() / sellQuant, 0)
+        #approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price)
+        #reward = approx_realized_pnl+ InventoryPnL - (1-self.rewardLambda)*jnp.maximum(0,InventoryPnL)
+        #reward = approx_realized_pnl + self.rewardLambda * InventoryPnL
+
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
         income=(agent_sells[:, 0]* jnp.abs(agent_sells[:, 1])).sum() / self.tick_size
