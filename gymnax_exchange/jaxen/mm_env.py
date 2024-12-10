@@ -174,7 +174,7 @@ class EnvParams(BaseEnvParams):
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=.0001, ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=0, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -826,6 +826,7 @@ class MarketMakingEnv(BaseLOBEnv):
         buy_levels=buy_task_prices(best_ask, best_bid)
         buy_levels = jnp.array(buy_levels[:-1])
         price_levels=jnp.concatenate([buy_levels,sell_levels])
+        #jax.debug.print("price_levels {}",price_levels)
 
         #price_levels = jax.lax.cond(
         #    state.is_sell_task,
@@ -1016,7 +1017,7 @@ class MarketMakingEnv(BaseLOBEnv):
         inventory_delta = buyQuant - sellQuant
         new_inventory=state.inventory+inventory_delta
 
-        #jax.lax.cond()
+       
         #Find the new obsvered mid price at the end of the step.
         #Note: to make integer of tick_size // is integer division.
         mid_price_end = (state.best_bids[-1][0] + state.best_asks[-1][0]) // 2 // self.tick_size * self.tick_size
@@ -1026,8 +1027,9 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print("InventoryPnL {}", InventoryPnL)
         #Market Making PNL:
         ##This bit gets some design choices. make average?       
-        averageMidprice = ((state.best_bids + state.best_asks) // 2).mean() // self.tick_size * self.tick_size
-        
+        averageMidprice = ((state.best_bids[:, 0] + state.best_asks[:, 0]) // 2).mean() // self.tick_size * self.tick_size
+        #jax.debug.print("averageMidprice {}", averageMidprice)
+        #jax.debug.print("state.best_bids {}", state.best_bids[:, 0])
         #TODO:Real PnL??+weighted inventory PnL
         buyPnL = ((averageMidprice - agent_buys[:, 0]) * jnp.abs(agent_buys[:, 1])).sum() / self.tick_size
         sellPnL = ((agent_sells[:, 0] - averageMidprice) * jnp.abs(agent_sells[:, 1])).sum() / self.tick_size
@@ -1036,7 +1038,7 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print("sellPnL {}", sellPnL)  
 
         # Multiply PnL from inventory with small lambda to dampen the effect
-        reward=buyPnL+sellPnL +  self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
+        reward=buyPnL+sellPnL + self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
 
         # Other versions of reward
         #reward=buyPnL+sellPnL + InventoryPnL # full speculation
@@ -1069,7 +1071,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
         #jax.debug.print("Income {}",income)
         #jax.debug.print("outgoing {}",outgoing)
-        #jax.debug.print("Reward {}",reward)
+       # jax.debug.print("Reward {}",reward)
         revenue=income-outgoing
         
         #calculate a fraction of total market activity attributable to us.
@@ -1245,7 +1247,7 @@ class MarketMakingEnv(BaseLOBEnv):
         p_mean = 3.5e7
         p_std = 1e6
         means = {
-            "is_sell_task": 0,
+            #"is_sell_task": 0,
             "p_aggr": p_mean,
             "q_aggr": 0,
             "p_pass": p_mean,
@@ -1263,7 +1265,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "max_steps": 0,
         }
         stds = {
-            "is_sell_task": 1,
+            #"is_sell_task": 1,
             "p_aggr": p_std,
             "q_aggr": 100,
             "p_pass": p_std,
@@ -1403,7 +1405,7 @@ if __name__ == "__main__":
         
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
-        print('revenue',state.total_revenue)
+     #   print('revenue',state.total_revenue)
         #print('revenue', state.total_revenue)
         #print('inventory',state.inventory)
         #print('reward',reward)
