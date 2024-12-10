@@ -227,22 +227,36 @@ class MarketMakingEnv(BaseLOBEnv):
         action_prices = action_msgs[:, 3]
      
         #jax.debug.print('action_msgs\n {}', action_msgs)
-
-        raw_order_side = jax.lax.cond(
-            state.is_sell_task,
-            lambda: state.ask_raw_orders,
-            lambda: state.bid_raw_orders
-        )
-        cnl_msgs = job.getCancelMsgs(
-            raw_order_side,
+        #Need cancel messages for bid and for ask:
+        cnl_msg_bid = job.getCancelMsgs(
+            state.bid_raw_orders,
             job.INITID + 1,
-            self.n_actions,  # max number of orders to cancel
-            1 - state.is_sell_task * 2
+            self.n_actions//2, 
+            1  # bids
         )
-        
+        cnl_msg_ask = job.getCancelMsgs(
+            state.ask_raw_orders,
+            job.INITID + 1,
+            self.n_actions//2,
+            -1  # ask side
+        )
+        cnl_msgs = jnp.concatenate([cnl_msg_bid, cnl_msg_ask], axis=0)
+       # raw_order_side = jax.lax.cond(
+        #    state.is_sell_task,
+         #   lambda: state.ask_raw_orders,
+         #   lambda: state.bid_raw_orders
+        #)#
+        #cnl_msgs = job.getCancelMsgs(
+           # raw_order_side,
+          #  job.INITID + 1,
+           # self.n_actions,  # max number of orders to cancel
+           # 1 - state.is_sell_task * 2
+       # )
+       
+        #jax.debug.print('cnl_msgs\n {}', cnl_msgs)
         # net actions and cancellations at same price if new action is not bigger than cancellation
         action_msgs, cnl_msgs = self._filter_messages(action_msgs, cnl_msgs)
-        #jax.debug.print('filtered action_msgs\n {}', action_msgs)
+       # jax.debug.print('filtered action_msgs\n {}', action_msgs)
         
         # Add to the top of the data messages
         total_messages = jnp.concatenate([cnl_msgs, action_msgs, data_messages], axis=0)
@@ -283,19 +297,19 @@ class MarketMakingEnv(BaseLOBEnv):
         mask2 = (self.trader_unique_id == executed[:, 6]) | (self.trader_unique_id == executed[:, 7]) #Mask to find trader ID
         agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
        
-
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
         #Logic: q>0, TIDs=BUY; Q<0 TIDa= BUY
-        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == executed[:, 7])))
+        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == agentTrades[:, 7])))
+        mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == agentTrades[:, 7])))
 
-        agent_buys=jnp.where(mask_buy[:, jnp.newaxis], executed, 0)
-        agent_sells=jnp.where(mask_buy[:, jnp.newaxis], 0, executed)
+        agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
+        agent_sells=jnp.where(mask_sell[:, jnp.newaxis], agentTrades, 0)
 
         buyQuant=jnp.abs(agent_buys[:, 1]).sum()
         sellQuant=jnp.abs(agent_sells[:, 1]).sum()
 
-        #totalQuant_step=buyQuant+sellQuant
+        totalQuant_step=buyQuant+sellQuant
         quant_left = state.task_to_execute
         
         #jax.debug.print('agent_trades\n {}', agent_trades[:30])
@@ -967,13 +981,13 @@ class MarketMakingEnv(BaseLOBEnv):
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
         #Logic: Q>0, TIDs=BUY; Q<0 TIDa= BUY
-        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == executed[:, 7])))
-        mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == executed[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == executed[:, 7])))
+        mask_buy = (((agentTrades[:, 1] >= 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] < 0)  & (self.trader_unique_id == agentTrades[:, 7])))
+        mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == agentTrades[:, 7])))
         #jax.debug.print("mask_buy: {}", mask_buy)
         agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
         agent_sells=jnp.where(mask_sell[:, jnp.newaxis], agentTrades, 0)
 
-        #jax.debug.print("Agent Buys: {}", agent_buys)
+       # jax.debug.print("Agent Buys: {}", agent_buys)
         #jax.debug.print("Agent Sells: {}", agent_sells)
 
         #Find amount bought and sold in the step
@@ -1007,6 +1021,8 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print("sellPnL {}", sellPnL)  
         #make the rewards a damped version of the inventory to discourage holding inventory
         reward=buyPnL+sellPnL-self.rewardLambda*jnp.maximum(0,InventoryPnL)
+        
+        #jax.debug.print("reward {}", reward) 
         undamped_reward=buyPnL+sellPnL+InventoryPnL
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
