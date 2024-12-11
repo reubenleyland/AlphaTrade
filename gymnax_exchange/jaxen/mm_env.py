@@ -159,7 +159,7 @@ class EnvState(BaseEnvState):
     #price_drift_rm: float
     #vwap_rm: float
    #  is_sell_task: int
-    trade_duration: float
+   # trade_duration: float
     bid_passive_2 :int
     quant_bid_passive_2 :int
     ask_passive_2:int
@@ -169,7 +169,7 @@ class EnvState(BaseEnvState):
 @struct.dataclass
 class EnvParams(BaseEnvParams):
    # task_size: int 
-    reward_lambda: float = 1.0
+    reward_lambda: float 
 
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
@@ -207,7 +207,7 @@ class MarketMakingEnv(BaseLOBEnv):
         return EnvParams(
             *base_vals,
             EnvState(*state_vals),
-            self.max_task_size,
+            #self.max_task_size,
             reward_lambda=self.rewardLambda
         )
 
@@ -400,7 +400,7 @@ class MarketMakingEnv(BaseLOBEnv):
            # "vwap_rm": state.vwap_rm,
            # "advantage_reward": state.advantage_return,
            # "drift_reward": state.drift_return,
-            "trade_duration": state.trade_duration,
+            #"trade_duration": state.trade_duration,
             "mkt_forced_quant": mkt_exec_quant + doom_quant,
             "doom_quant": doom_quant,
            # "is_sell_task": state.is_sell_task,
@@ -512,7 +512,7 @@ class MarketMakingEnv(BaseLOBEnv):
             #price_drift_rm=0.,
             #vwap_rm=0.,
            # is_sell_task=is_sell_task, # updated on reset
-            trade_duration=0.,
+            #trade_duration=0.,
             # updated on reset:
             bid_passive_2 = 0,
             quant_bid_passive_2 = 0,
@@ -1374,7 +1374,7 @@ if __name__ == "__main__":
     # env_params=env.default_params
     env_params = dataclasses.replace(
         env.default_params,
-        reward_lambda=1,
+        reward_lambda=0.1,
         #task_size=config["MAX_TASK_SIZE"],
         episode_time=config["EPISODE_TIME"],  # in seconds
     )
