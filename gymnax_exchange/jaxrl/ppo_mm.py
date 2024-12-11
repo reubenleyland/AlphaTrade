@@ -654,6 +654,7 @@ def make_train(config):
                     buyQuant=info["buyQuant"]
                     sellQuant=info["sellQuant"]
                     market_share=info["market_share"]
+                    other_exec_quants=info["other_exec_quants"]
 
 
 
@@ -721,6 +722,7 @@ def make_train(config):
                                 "buyQuant":jnp.mean(buyQuant) if buyQuant.size > 0 else 0,
                                 "sellQuant":jnp.mean(sellQuant) if sellQuant.size > 0 else 0,
                                 "market_share":jnp.mean(market_share) if market_share.size > 0 else 0,
+                                "other_exec_quants":jnp.mean(other_exec_quants) if other_exec_quants.size > 0 else 0,
                                 #"quant_executed": jnp.mean(quant_executed), #quant_executed[t],
                                 #"average_price": jnp.mean(average_price), #average_price[t],
                                 # "slippage_rm":slippage_rm[t],

@@ -319,7 +319,7 @@ class MarketMakingEnv(BaseLOBEnv):
         totalQuant_step=buyQuant+sellQuant
        # quant_left = #state.task_to_execute
         
-        #jax.debug.print('agent_trades\n {}', agent_trades[:30])
+        #jax.debug.print('agent_trades\n {}', agentTrades)
         # jax.debug.print('executions: {}', executions)
         # jax.debug.print(
         #     "quant_executed_this_step: {}, quant_left: {}, quant_executed_this_step {}",
@@ -409,7 +409,12 @@ class MarketMakingEnv(BaseLOBEnv):
             "mkt_forced_quant": mkt_exec_quant + doom_quant,
             "doom_quant": doom_quant,
            # "is_sell_task": state.is_sell_task,
-            "market_share":extras["market_share"]
+            "market_share":extras["market_share"],
+            "total_ask_quant_before_step":total_ask_quant_before_step,
+            "total_bid_quant_before_step":total_bid_quant_before_step,
+            "buyQuant":extras["buyQuant"],
+            "sellQuant":extras["sellQuant"],
+            "other_exec_quants":extras["other_exec_quants"]
 
         }
         
@@ -785,7 +790,7 @@ class MarketMakingEnv(BaseLOBEnv):
             elif action.shape[0]//2 == 2:
                 return FT, NT, MKT
             elif action.shape[0]//2 == 1:
-                return FT, MKT
+                return PP, MKT
 
         def sell_task_prices(best_ask, best_bid):
             # FT = best_bid
@@ -804,7 +809,7 @@ class MarketMakingEnv(BaseLOBEnv):
             elif action.shape[0]//2 == 2:
                 return FT, NT, MKT
             elif action.shape[0]//2 == 1:
-                return FT, MKT
+                return PP, MKT
 
         # ============================== Get Action_msgs ==============================
         # --------------- 01 rest info for deciding action_msgs ---------------
@@ -1095,7 +1100,10 @@ class MarketMakingEnv(BaseLOBEnv):
             "revenue": pnl / 100_000,  # pure revenue is not informative if direction is random (-> flip and normalise)
             "end_inventory":new_inventory,
             "mid_price":mid_price_end,
-            "agentQuant":inventory_delta
+            "agentQuant":inventory_delta,
+            "buyQuant":buyQuant,
+            "sellQuant":sellQuant,
+            "other_exec_quants":other_exec_quants
         }
 
     def _get_obs(
@@ -1323,7 +1331,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """Observation space of the environment."""
         #space = spaces.Box(-10,10,(809,),dtype=jnp.float32) 
         # space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
-        space = spaces.Box(-10, 10, (27,), dtype=jnp.float32) 
+        space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
         return space
 
     def state_space(self, params: EnvParams) -> spaces.Dict:
