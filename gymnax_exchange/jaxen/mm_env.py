@@ -530,7 +530,7 @@ class MarketMakingEnv(BaseLOBEnv):
             # print(f"{i} remainingTime{remainingTime} marketOrderTime{marketOrderTime}")
             # ---------- ifMarketOrder ----------
             # ---------- quants ----------
-            remainedQuant =remainedQuant 
+            remainedQuant =state.inventory
             #state.task_to_execute - state.quant_executed
             remainedStep = state.max_steps_in_episode - state.step_counter
             stepQuant = jnp.ceil(remainedQuant/remainedStep).astype(jnp.int32) # for limit orders
@@ -539,7 +539,8 @@ class MarketMakingEnv(BaseLOBEnv):
             quants = jnp.where(ifMarketOrder,market_quants,limit_quants)
             # ---------- quants ----------
             return jnp.array(quants) 
-
+        
+        #we don't use truncate_actoin, we can trade into negative inventory etc
         def truncate_action(action, remainQuant):
             action = jnp.round(action).clip(0, remainQuant).astype(jnp.int32)
             # scaledAction = utils.clip_by_sum_int(action, remainQuant)
@@ -555,7 +556,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
           #  - state.quant_executed
 
-        #action = truncate_action(action, state.task_to_execute )
+        #action = truncate_action(action, state.inventory )
         # jax.debug.print("base_ {}, delta_ {}, action_ {}; action {}",base_, delta_,action_,action)
         # jax.debug.print("action {}", action)
         return action
