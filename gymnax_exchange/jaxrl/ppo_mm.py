@@ -93,7 +93,7 @@ def make_train(config):
     env_params = dataclasses.replace(
         env.default_params,
         reward_lambda=config["REWARD_LAMBDA"],
-        task_size=config["TASK_SIZE"],
+       # task_size=config["TASK_SIZE"],
         episode_time=config["EPISODE_TIME"],
     )
     env = LogWrapper(env)
@@ -802,7 +802,7 @@ if __name__ == "__main__":
         "REWARD_LAMBDA": .1, #0.001,
         "ACTION_TYPE": "pure", # "delta"
         "MAX_TASK_SIZE": 100,
-        "TASK_SIZE": 100, # 500,
+        #"TASK_SIZE": 100, # 500,
         "EPISODE_TIME": 60 * 5, # time in seconds
         "DATA_TYPE": "fixed_time", # "fixed_time", "fixed_steps"
         "CONT_ACTIONS": False,  # True
