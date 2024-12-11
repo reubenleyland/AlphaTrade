@@ -233,17 +233,18 @@ class MarketMakingEnv(BaseLOBEnv):
         #Need cancel messages for bid and for ask:
         cnl_msg_bid = job.getCancelMsgs(
             state.bid_raw_orders,
-            job.INITID + 1,
+            self.trader_unique_id,
             self.n_actions//2, 
             1  # bids
         )
         cnl_msg_ask = job.getCancelMsgs(
             state.ask_raw_orders,
-            job.INITID + 1,
+            self.trader_unique_id,
             self.n_actions//2,
             -1  # ask side
         )
         cnl_msgs = jnp.concatenate([cnl_msg_bid, cnl_msg_ask], axis=0)
+        #jax.debug.print("cnl_msgs{}",cnl_msgs)
        # raw_order_side = jax.lax.cond(
         #    state.is_sell_task,
          #   lambda: state.ask_raw_orders,
@@ -257,8 +258,12 @@ class MarketMakingEnv(BaseLOBEnv):
        # )
 
         #Quantities in book:
-        total_ask_quant_before_step=state.ask_raw_orders[:,2].sum()
-        total_bid_quant_before_step=state.bid_raw_orders[:,2].sum()
+        total_ask_quant_before_step=state.ask_raw_orders[:,1].sum()
+        total_bid_quant_before_step=state.bid_raw_orders[:,1].sum()
+        jax.debug.print("total_bid_quant_before_step {}",total_bid_quant_before_step)
+        #jax.debug.print("state.ask_raw_orders {}",state.ask_raw_orders)
+        jax.debug.print("state.bid_raw_orders {}",state.bid_raw_orders)
+        
 
         #jax.debug.print('cnl_msgs\n {}', cnl_msgs)
         # net actions and cancellations at same price if new action is not bigger than cancellation
@@ -388,6 +393,8 @@ class MarketMakingEnv(BaseLOBEnv):
             delta_time = new_time[0] + new_time[1]/1e9 - state.time[0] - state.time[1]/1e9,
         )
         done = self.is_terminal(state, params)
+        other_exec_quants=extras["other_exec_quants"]
+        #jax.debug.print("other_exec_quants {}",other_exec_quants)
         info = {
             "window_index": state.window_index,
             "total_revenue": state.total_revenue,
@@ -1370,7 +1377,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure", # "pure",
         "REWARD_LAMBDA": 1.0,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 60* 5, # 60 seconds
+        "EPISODE_TIME": 60* 50, # 60 seconds
     }
         
     rng = jax.random.PRNGKey(0)
@@ -1412,7 +1419,8 @@ if __name__ == "__main__":
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
-        test_action = env.action_space().sample(key_policy) // 10
+        #test_action = env.action_space().sample(key_policy) // 10
+        test_action=jnp.array([1,1])
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)
