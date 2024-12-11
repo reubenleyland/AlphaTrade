@@ -168,7 +168,7 @@ class EnvState(BaseEnvState):
 
 @struct.dataclass
 class EnvParams(BaseEnvParams):
-    task_size: int 
+   # task_size: int 
     reward_lambda: float = 1.0
 
 class MarketMakingEnv(BaseLOBEnv):
@@ -289,15 +289,15 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print('agent_id {}, trades {}', self.trader_unique_id, trades)
         # filter to trades by our agent (rest are 0s)
 
-        agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
+        agentTrades = job.get_agent_trades(trades, self.trader_unique_id)
         # executions = self._get_executed_by_level(agent_trades, action, state)
 
         #=========REPETITION OF CODE FROM GET AGENT TRADES TRADES TO FIND AGENT QUANT==============###
-        executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
+       # executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
              
         # Mask to keep only the trades where the RL agent is involved, apply mask.
-        mask2 = (self.trader_unique_id == executed[:, 6]) | (self.trader_unique_id == executed[:, 7]) #Mask to find trader ID
-        agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
+        #mask2 = (self.trader_unique_id == executed[:, 6]) | (self.trader_unique_id == executed[:, 7]) #Mask to find trader ID
+        #agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
        
         #Find agent Buys and Agent sells from agent Trades:
         #The below mask puts passive buys or aggresive buys into "agent buys".
@@ -312,7 +312,7 @@ class MarketMakingEnv(BaseLOBEnv):
         sellQuant=jnp.abs(agent_sells[:, 1]).sum()
 
         totalQuant_step=buyQuant+sellQuant
-        quant_left = state.task_to_execute
+       # quant_left = #state.task_to_execute
         
         #jax.debug.print('agent_trades\n {}', agent_trades[:30])
         # jax.debug.print('executions: {}', executions)
@@ -323,7 +323,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # TODO: check if episode time is over and force market order if necessary
         (asks, bids, trades), (new_bestask, new_bestbid), new_id_counter, new_time, mkt_exec_quant, doom_quant = \
             self._force_market_order_if_done(
-                quant_left, bestasks[-1], bestbids[-1], time, asks, bids, trades, state, params)
+                 bestasks[-1], bestbids[-1], time, asks, bids, trades, state, params)
 
         bestasks = jnp.concatenate([bestasks, jnp.resize(new_bestask, (1, 2))], axis=0, dtype=jnp.int32)
         bestbids = jnp.concatenate([bestbids, jnp.resize(new_bestbid, (1, 2))], axis=0, dtype=jnp.int32)
@@ -338,8 +338,8 @@ class MarketMakingEnv(BaseLOBEnv):
         reward, extras = self._get_reward(state, params, trades)
         #quant_executed = state.quant_executed + extras["agentQuant"]
         # CAVE: uses seconds only (not ns)
-        trade_duration_step = (jnp.abs(agent_trades[:, 1]) / state.task_to_execute * (agent_trades[:, 4] - state.init_time[0])).sum()
-        trade_duration = state.trade_duration + trade_duration_step
+       # trade_duration_step = (jnp.abs(agent_trades[:, 1]) / state.task_to_execute * (agent_trades[:, 4] - state.init_time[0])).sum()
+       # trade_duration = state.trade_duration + trade_duration_step
         #jax.debug.print('Prev_actions: {}', jnp.vstack([action_prices, action]).T)
         #jax.debug.print('trade_duration_step: {}, trade_duration: {}', trade_duration_step, trade_duration)
         #jax.debug.print('mkt_exec_quant {}',mkt_exec_quant)
@@ -365,7 +365,7 @@ class MarketMakingEnv(BaseLOBEnv):
             init_price = state.init_price,
             mid_price=extras["mid_price"],
             inventory=extras["end_inventory"],
-            task_to_execute = state.task_to_execute,
+           # task_to_execute = state.task_to_execute,
             #quant_executed = quant_executed,
             total_revenue = state.total_revenue + extras["revenue"],
            # drift_return = state.drift_return + extras["drift"],
@@ -375,7 +375,7 @@ class MarketMakingEnv(BaseLOBEnv):
             #price_drift_rm = extras["price_drift_rm"],
             #vwap_rm = extras["vwap_rm"],
             #is_sell_task = state.is_sell_task,
-            trade_duration = trade_duration,
+           # trade_duration = trade_duration,
             bid_passive_2 = bid_passive_2,
             quant_bid_passive_2 = quant_bid_passive_2,
             ask_passive_2=ask_passive_2,
@@ -387,7 +387,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "window_index": state.window_index,
             "total_revenue": state.total_revenue,
            # "quant_executed": state.quant_executed,
-            "task_to_execute": state.task_to_execute,
+           # "task_to_execute": state.task_to_execute,
            # "average_price": jnp.nan_to_num(state.total_revenue 
                                            # / state.quant_executed, 0.0),
                                            
@@ -501,7 +501,7 @@ class MarketMakingEnv(BaseLOBEnv):
             best_bids=jnp.resize(best_bid,(self.stepLines,2)),
             init_price=M,
             mid_price=M,
-            task_to_execute=self.max_task_size,
+            #task_to_execute=self.max_task_size,
             inventory=0,
             #quant_executed=0,
             total_revenue=0.,
@@ -555,7 +555,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
           #  - state.quant_executed
 
-        action = truncate_action(action, state.task_to_execute )
+        #action = truncate_action(action, state.task_to_execute )
         # jax.debug.print("base_ {}, delta_ {}, action_ {}; action {}",base_, delta_,action_,action)
         # jax.debug.print("action {}", action)
         return action
@@ -867,7 +867,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
     def _force_market_order_if_done(
             self,
-            quant_left: jax.Array,
+            #quant_left: jax.Array,
             bestask: jax.Array,
             bestbid: jax.Array,
             time: jax.Array,
@@ -889,7 +889,7 @@ class MarketMakingEnv(BaseLOBEnv):
             new_time = time + params.time_delay_obs_act
             mkt_msg = jnp.array([
                 # type, side, quant, price
-                1, side, quant_left, mkt_p,
+                1, side, state.inventory, mkt_p,
                 self.trader_unique_id,
                 self.trader_unique_id + state.customIDcounter + self.n_actions,  # unique order ID for market order
                 *new_time,  # time of message
@@ -955,7 +955,7 @@ class MarketMakingEnv(BaseLOBEnv):
         
         # assume execution at really unfavorable price if market order doesn't execute (worst case)
         # create artificial trades for this
-        quant_still_left = quant_left - mkt_exec_quant
+        quant_still_left = state.inventory - mkt_exec_quant
         # jax.debug.print('quant_still_left: {}', quant_still_left)
         # assume doom price with 25% extra cost
         is_sell_task = jnp.where(state.inventory > 0, 1, 0)
@@ -1239,7 +1239,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "time": state.time,
             "episode_time": state.time - state.init_time,
             "init_price": state.init_price,
-            "task_size": state.task_to_execute,
+           # "task_size": state.task_to_execute,
            # "executed_quant": state.quant_executed,
             "step_counter": state.step_counter,
             "max_steps": state.max_steps_in_episode,
@@ -1375,7 +1375,7 @@ if __name__ == "__main__":
     env_params = dataclasses.replace(
         env.default_params,
         reward_lambda=1,
-        task_size=config["MAX_TASK_SIZE"],
+        #task_size=config["MAX_TASK_SIZE"],
         episode_time=config["EPISODE_TIME"],  # in seconds
     )
     # print(env_params.message_data.shape, env_params.book_data.shape)
