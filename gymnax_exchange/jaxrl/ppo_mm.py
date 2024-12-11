@@ -651,6 +651,9 @@ def make_train(config):
                     inventories = info["inventory"] 
                     total_ask_quant_before_step=info["total_ask_quant_before_step"]
                     total_bid_quant_before_step=info["total_bid_quant_before_step"]
+                    buyQuant=info["buyQuant"]
+                    sellQuant=info["sellQuant"]
+                    market_share=info["market_share"]
 
 
 
@@ -715,6 +718,9 @@ def make_train(config):
                                 "inventory": jnp.mean(inventories) if inventories.size > 0 else 0, 
                                 "total_ask_quant_before_step":jnp.mean(total_ask_quant_before_step) if total_ask_quant_before_step.size > 0 else 0,
                                 "total_bid_quant_before_step":jnp.mean(total_bid_quant_before_step) if total_bid_quant_before_step.size > 0 else 0,
+                                "buyQuant":jnp.mean(buyQuant) if buyQuant.size > 0 else 0,
+                                "sellQuant":jnp.mean(sellQuant) if sellQuant.size > 0 else 0,
+                                "market_share":jnp.mean(market_share) if market_share.size > 0 else 0,
                                 #"quant_executed": jnp.mean(quant_executed), #quant_executed[t],
                                 #"average_price": jnp.mean(average_price), #average_price[t],
                                 # "slippage_rm":slippage_rm[t],

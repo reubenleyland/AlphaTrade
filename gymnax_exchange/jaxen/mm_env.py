@@ -222,6 +222,7 @@ class MarketMakingEnv(BaseLOBEnv):
             state.step_counter,
             state.init_time[0] + params.episode_time
         )
+        #jax.debug.print("data_messages{}",data_messages)
         
         action = self._reshape_action(input_action, state, params,key)
         #print(action)
@@ -996,7 +997,8 @@ class MarketMakingEnv(BaseLOBEnv):
         mask2 = (self.trader_unique_id == executed[:, 6]) | (self.trader_unique_id == executed[:, 7]) #Mask to find trader ID
         agentTrades = jnp.where(mask2[:, jnp.newaxis], executed, 0)
         otherTrades = jnp.where(mask2[:, jnp.newaxis], 0, executed)
-        #jax.debug.print("agentTrades: {}", agentTrades)
+    
+        #jax.debug.print("otherTrades size: {}", otherTrades.size())
 
 
         #Find agent Buys and Agent sells from agent Trades:
