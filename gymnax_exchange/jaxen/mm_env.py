@@ -146,7 +146,7 @@ class EnvState(BaseEnvState):
     best_bids: chex.Array
     # Execution specific stuff
     init_price: int
-    task_to_execute: int
+    #task_to_execute: int
     #quant_executed: int
     inventory:int
     mid_price:int
