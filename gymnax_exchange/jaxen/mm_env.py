@@ -174,7 +174,7 @@ class EnvParams(BaseEnvParams):
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=0, ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=0.0001, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -254,7 +254,11 @@ class MarketMakingEnv(BaseLOBEnv):
            # self.n_actions,  # max number of orders to cancel
            # 1 - state.is_sell_task * 2
        # )
-       
+
+        #Quantities in book:
+        total_ask_quant_before_step=state.ask_raw_orders[:,2].sum()
+        total_bid_quant_before_step=state.bid_raw_orders[:,2].sum()
+
         #jax.debug.print('cnl_msgs\n {}', cnl_msgs)
         # net actions and cancellations at same price if new action is not bigger than cancellation
         action_msgs, cnl_msgs = self._filter_messages(action_msgs, cnl_msgs)
@@ -1073,7 +1077,7 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print("Income {}",income)
         #jax.debug.print("outgoing {}",outgoing)
        # jax.debug.print("Reward {}",reward)
-        revenue=income-outgoing
+        pnl=income-outgoing
         
         #calculate a fraction of total market activity attributable to us.
         other_exec_quants = jnp.abs(otherTrades[:, 1]).sum()
@@ -1086,7 +1090,7 @@ class MarketMakingEnv(BaseLOBEnv):
         return reward_scaled, {
             "market_share": market_share,
             "undamped_reward":undamped_reward,
-            "revenue": revenue / 100_000,  # pure revenue is not informative if direction is random (-> flip and normalise)
+            "revenue": pnl / 100_000,  # pure revenue is not informative if direction is random (-> flip and normalise)
             "end_inventory":new_inventory,
             "mid_price":mid_price_end,
             "agentQuant":inventory_delta
