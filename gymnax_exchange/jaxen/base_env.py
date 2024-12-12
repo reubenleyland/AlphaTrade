@@ -170,7 +170,7 @@ class BaseLOBEnv(environment.Environment):
         self.nTradesLogged=100
         self.book_depth=10
         self.n_actions=2
-        self.n_ticks_in_book = 50 # Depth of PP actions
+        self.n_ticks_in_book = 2 # Depth of PP actions
         self.customIDCounter=0
         self.trader_unique_id=10
         self.tick_size=100
@@ -251,6 +251,7 @@ class BaseLOBEnv(environment.Environment):
         #Get initial orders (2xNdepth)x6 based on the initial L2 orderbook for this window 
         def get_initial_orders(book_data,time):
             orderbookLevels=10
+            #initid=25
             initid=job.INITID
             data=jnp.array(book_data).reshape(int(10*2),2)
             newarr = jnp.zeros((int(orderbookLevels*2),8),dtype=jnp.int32)
@@ -266,12 +267,14 @@ class BaseLOBEnv(environment.Environment):
                 .at[:,7].set(time[1])
             return initOB
         init_orders=get_initial_orders(book_data,time)
+        #jax.debug.print("init_orders {}",init_orders)
         #Initialise both sides of the book as being empty
         asks_raw=job.init_orderside(self.nOrdersPerSide)
         bids_raw=job.init_orderside(self.nOrdersPerSide)
         trades_init=(jnp.ones((self.nTradesLogged,8))*-1).astype(jnp.int32)
         #Process the initial messages through the orderbook
         ordersides=job.scan_through_entire_array(init_orders,(asks_raw,bids_raw,trades_init))
+        #jax.debug.print("trades init {}",ordersides[2])
         return EnvState(ask_raw_orders=ordersides[0],
                         bid_raw_orders=ordersides[1],
                         trades=ordersides[2],
@@ -308,7 +311,7 @@ class BaseLOBEnv(environment.Environment):
                                                     i,
                                                     starts[i]) 
                         for i in range(self.n_windows)]
-            #jax.debug.print("{}",states)
+            
             self.init_states_array=tree_stack(states)
             print("SAVING STATES TO PKL...")
             with open(pkl_file_name, 'wb') as f:

@@ -215,14 +215,15 @@ class MarketMakingEnv(BaseLOBEnv):
     def step_env(
         self, key: chex.PRNGKey, state: EnvState, input_action: jax.Array, params: EnvParams
     ) -> Tuple[chex.Array, EnvState, float, bool, dict]:
-
+        #jax.debug.print("state.trades before first msg {}",state.trades)
+       
         data_messages = self._get_data_messages(
             params.message_data,
             state.start_index,
             state.step_counter,
             state.init_time[0] + params.episode_time
         )
-        #jax.debug.print("data_messages{}",data_messages)
+       # jax.debug.print("data_messages{}",data_messages)
         
         action = self._reshape_action(input_action, state, params,key)
         #print(action)
@@ -258,11 +259,12 @@ class MarketMakingEnv(BaseLOBEnv):
        # )
 
         #Quantities in book:
+        #Need to exclude the negative 1s here
         total_ask_quant_before_step=state.ask_raw_orders[:,1].sum()
         total_bid_quant_before_step=state.bid_raw_orders[:,1].sum()
-        jax.debug.print("total_bid_quant_before_step {}",total_bid_quant_before_step)
+        #jax.debug.print("total_bid_quant_before_step {}",total_bid_quant_before_step)
         #jax.debug.print("state.ask_raw_orders {}",state.ask_raw_orders)
-        jax.debug.print("state.bid_raw_orders {}",state.bid_raw_orders)
+        #jax.debug.print("state.bid_raw_orders {}",state.bid_raw_orders)
         
 
         #jax.debug.print('cnl_msgs\n {}', cnl_msgs)
@@ -272,6 +274,7 @@ class MarketMakingEnv(BaseLOBEnv):
         
         # Add to the top of the data messages
         total_messages = jnp.concatenate([cnl_msgs, action_msgs, data_messages], axis=0)
+        #jax.debug.print("total_messages{}",total_messages)
         # Save time of final message to add to state
         time = total_messages[-1, -2:]
         # To only ever consider the trades from the last step simply replace state.trades with an array of -1s of the same size. 
@@ -283,7 +286,9 @@ class MarketMakingEnv(BaseLOBEnv):
             # TODO: this returns bid/ask for last stepLines only, could miss the direct impact of actions
             self.stepLines
         )
-
+        #jax.debug.print("state.trades after msgs {}",trades)
+        #jax.debug.print("state.ask_raw_orders after msgs {}",state.ask_raw_orders)
+        #jax.debug.print("state.bid_raw_orders after msgs {}",state.bid_raw_orders)
         # If best price is not available in the current step, use the last available price
         # TODO: check if we really only want the most recent stepLines prices (+1 for the additional market order)
         bestasks, bestbids = (
@@ -296,7 +301,7 @@ class MarketMakingEnv(BaseLOBEnv):
                 state.best_bids[-1, 0]
             )
         )
-        #jax.debug.print('agent_id {}, trades {}', self.trader_unique_id, trades)
+       # jax.debug.print('agent_id {}, trades {}', self.trader_unique_id, trades)
         # filter to trades by our agent (rest are 0s)
 
         agentTrades = job.get_agent_trades(trades, self.trader_unique_id)
@@ -1412,15 +1417,15 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,10):
+    for i in range(1,15):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
-        #test_action = env.action_space().sample(key_policy) // 10
-        test_action=jnp.array([1,1])
+        test_action = env.action_space().sample(key_policy) // 10
+        #test_action=jnp.array([1,1])
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)
@@ -1428,6 +1433,7 @@ if __name__ == "__main__":
         
         obs, state, reward, done, info = env.step(
             key_step, state, test_action, env_params)
+        
      #   print('revenue',state.total_revenue)
         #print('revenue', state.total_revenue)
         #print('inventory',state.inventory)
