@@ -286,8 +286,9 @@ class MarketMakingEnv(BaseLOBEnv):
             # TODO: this returns bid/ask for last stepLines only, could miss the direct impact of actions
             self.stepLines
         )
+        #jax.debug.print("bestasks {}",bestasks)
         #jax.debug.print("state.trades after msgs {}",trades)
-        #jax.debug.print("state.ask_raw_orders after msgs {}",state.ask_raw_orders)
+       # jax.debug.print("state.ask_raw_orders after msgs {}",state.ask_raw_orders)
         #jax.debug.print("state.bid_raw_orders after msgs {}",state.bid_raw_orders)
         # If best price is not available in the current step, use the last available price
         # TODO: check if we really only want the most recent stepLines prices (+1 for the additional market order)
@@ -350,7 +351,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # TODO: consider adding quantity before (in priority) to each price / level
 
         # TODO: use the agent quant identification from the separate function _get_executed_by_level instead of _get_reward
-        reward, extras = self._get_reward(state, params, trades)
+        reward, extras = self._get_reward(state, params, trades,bestasks,bestbids)
         #quant_executed = state.quant_executed + extras["agentQuant"]
         # CAVE: uses seconds only (not ns)
        # trade_duration_step = (jnp.abs(agent_trades[:, 1]) / state.task_to_execute * (agent_trades[:, 4] - state.init_time[0])).sum()
@@ -399,6 +400,9 @@ class MarketMakingEnv(BaseLOBEnv):
         )
         done = self.is_terminal(state, params)
         other_exec_quants=extras["other_exec_quants"]
+        #book_vol_av_ask=(state.ask_raw_orders[:,0]/state.ask_raw_orders[:,1]).mean()*(state.ask_raw_orders[:,1].sum())
+        #book_vol_av_bid = (state.bid_raw_orders[:, 0] / state.bid_raw_orders[:, 1]).mean() * (state.bid_raw_orders[:, 1].sum())
+
         #jax.debug.print("other_exec_quants {}",other_exec_quants)
         info = {
             "window_index": state.window_index,
@@ -430,6 +434,8 @@ class MarketMakingEnv(BaseLOBEnv):
             "averageMidprice":extras["averageMidprice"],
             "action_prices_0":action_prices[0],
             "action_prices_1":action_prices[1]
+            #"book_vol_av_ask":book_vol_av_ask,
+            #"book_vol_av_bid":book_vol_av_bid
 
         }
         
@@ -1008,7 +1014,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
         return (asks, bids, trades), (bestask, bestbid), id_counter, time, mkt_exec_quant, doom_quant
 
-    def _get_reward(self, state: EnvState, params: EnvParams, trades: chex.Array) -> jnp.int32:
+    def _get_reward(self, state: EnvState, params: EnvParams, trades: chex.Array,bestasks :chex.Array, bestbids: chex.Array) -> jnp.int32:
         # ====================get reward and revenue ==========================================#
         # Gather the 'trades' that are nonempty, make the rest 0
         executed = jnp.where((trades[:, 0] >= 0)[:, jnp.newaxis], trades, 0)
@@ -1047,14 +1053,14 @@ class MarketMakingEnv(BaseLOBEnv):
        
         #Find the new obsvered mid price at the end of the step.
         #Note: to make integer of tick_size // is integer division.
-        mid_price_end = (state.best_bids[-1][0] + state.best_asks[-1][0]) // 2 // self.tick_size * self.tick_size
+        mid_price_end = (bestbids[-1][0] + bestasks[-1][0]) // 2 // self.tick_size * self.tick_size
            
         #Inventory PnL: 
         InventoryPnL= (new_inventory*mid_price_end-state.inventory*state.mid_price) / self.tick_size
         #jax.debug.print("InventoryPnL {}", InventoryPnL)
         #Market Making PNL:
         ##This bit gets some design choices. make average?       
-        averageMidprice = ((state.best_bids[:, 0] + state.best_asks[:, 0]) // 2).mean() // self.tick_size * self.tick_size
+        averageMidprice = ((bestbids[:, 0] + bestasks[:, 0]) // 2).mean() // self.tick_size * self.tick_size
         #jax.debug.print("averageMidprice {}", averageMidprice)
         #jax.debug.print("state.best_bids {}", state.best_bids[:, 0])
         #TODO:Real PnL??+weighted inventory PnL
@@ -1422,7 +1428,7 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,15):
+    for i in range(1,1521):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)

@@ -17,7 +17,7 @@ faulthandler.enable()
 # ============================
 # Configuration
 # ============================
-test_steps = 1500  # Adjusted for your test case; make sure this isn't too high
+test_steps = 3000  # Adjusted for your test case; make sure this isn't too high
 
 if __name__ == "__main__":
     try:
@@ -32,9 +32,9 @@ if __name__ == "__main__":
         "MAX_TASK_SIZE": 100,
         "WINDOW_INDEX": 1,
         "ACTION_TYPE": "pure",
-        "REWARD_LAMBDA": 1.0,
+        "REWARD_LAMBDA": 0,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 60 * 50,  # 60 seconds
+        "EPISODE_TIME": 480 * 50,  # 60 seconds
     }
 
     # Set up random keys for JAX
@@ -79,7 +79,11 @@ if __name__ == "__main__":
     sellQuant = np.zeros((test_steps, 1), dtype=int)
     bid_price = np.zeros((test_steps, 1), dtype=int)
     ask_price = np.zeros((test_steps, 1), dtype=int)
+    state_best_ask = np.zeros((test_steps, 1), dtype=int)
+    state_best_bid = np.zeros((test_steps, 1), dtype=int)
     averageMidprice = np.zeros((test_steps, 1), dtype=int)
+   # book_vol_av_bid= np.zeros((test_steps, 1), dtype=int)
+   # book_vol_av_ask = np.zeros((test_steps, 1), dtype=int)
 
     # ============================
     # Track the number of valid steps
@@ -107,7 +111,10 @@ if __name__ == "__main__":
         bid_price[i] = info["action_prices_0"]  # Store best ask
         ask_price[i] = info["action_prices_1"]  # Store best bid
         averageMidprice[i] = info["averageMidprice"]  # Store mid price
-
+    #    book_vol_av_bid[i]=info["book_vol_av_bid"]
+     #   book_vol_av_ask[i]=info["book_vol_av_ask"]
+       # state_best_ask[i] = state.best_asks[-1,0]
+      #  state_best_bid[i] = state.best_bids[-1,0]
         # Increment valid steps
         valid_steps += 1
         
@@ -118,14 +125,18 @@ if __name__ == "__main__":
     # ============================
     # Clip the arrays to remove trailing zeros
     # ============================
-    rewards = rewards[:valid_steps]
-    inventory = inventory[:valid_steps]
-    total_revenue = total_revenue[:valid_steps]
-    buyQuant = buyQuant[:valid_steps]
-    sellQuant = sellQuant[:valid_steps]
-    bid_price = bid_price[:valid_steps]
-    ask_price = ask_price[:valid_steps]
-    averageMidprice = averageMidprice[:valid_steps]
+    rewards = rewards[:valid_steps-1]
+    inventory = inventory[:valid_steps-1]
+    total_revenue = total_revenue[:valid_steps-1] 
+    buyQuant = buyQuant[:valid_steps-1]
+    sellQuant = sellQuant[:valid_steps-1]
+    bid_price = bid_price[:valid_steps-1]
+    ask_price = ask_price[:valid_steps-1]
+    averageMidprice = averageMidprice[:valid_steps-1]
+    #state_best_bid = state_best_bid[:valid_steps-1]
+       # state_best_ask = state_best_ask[:valid_steps-1]
+   # book_vol_av_bid= book_vol_av_bid[:valid_steps-1]
+   # book_vol_av_ask= book_vol_av_ask[:valid_steps-1]
 
     # ============================
     # Save all data to CSV
@@ -149,35 +160,37 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(3, 3, figsize=(15, 15))  # Adjust the grid as needed
 
     # Plot each metric on a separate subplot
-    axes[0, 0].plot(range(valid_steps), rewards, label="Reward", color='blue')
+    axes[0, 0].plot(range(valid_steps-1), rewards, label="Reward", color='blue')
     axes[0, 0].set_xlabel("Steps")
     axes[0, 0].set_ylabel("Reward")
     axes[0, 0].set_title("Rewards Over Steps")
     
-    axes[0, 1].plot(range(valid_steps), inventory, label="Inventory", color='green')
+    axes[0, 1].plot(range(valid_steps-1), inventory, label="Inventory", color='green')
     axes[0, 1].set_xlabel("Steps")
     axes[0, 1].set_ylabel("Inventory")
     axes[0, 1].set_title("Inventory Over Steps")
     
-    axes[0, 2].plot(range(valid_steps), total_revenue, label="Total Revenue", color='orange')
+    axes[0, 2].plot(range(valid_steps-1), total_revenue, label="Total Revenue", color='orange')
     axes[0, 2].set_xlabel("Steps")
     axes[0, 2].set_ylabel("Total Revenue")
     axes[0, 2].set_title("Total Revenue Over Steps")
     
-    axes[1, 0].plot(range(valid_steps), buyQuant, label="Buy Quantity", color='red')
+    axes[1, 0].plot(range(valid_steps-1), buyQuant, label="Buy Quantity", color='red')
     axes[1, 0].set_xlabel("Steps")
     axes[1, 0].set_ylabel("Buy Quantity")
     axes[1, 0].set_title("Buy Quantity Over Steps")
     
-    axes[1, 1].plot(range(valid_steps), sellQuant, label="Sell Quantity", color='purple')
+    axes[1, 1].plot(range(valid_steps-1), sellQuant, label="Sell Quantity", color='purple')
     axes[1, 1].set_xlabel("Steps")
     axes[1, 1].set_ylabel("Sell Quantity")
     axes[1, 1].set_title("Sell Quantity Over Steps")
     
     # Combined plot for Bid Price, Ask Price, and Average Mid Price
-    axes[1, 2].plot(range(valid_steps), bid_price, label="Bid Price", color='pink')
-    axes[1, 2].plot(range(valid_steps), ask_price, label="Ask Price", color='cyan')
-    axes[1, 2].plot(range(valid_steps), averageMidprice, label="Average Mid Price", color='magenta')
+    axes[1, 2].plot(range(valid_steps-1), bid_price, label="Bid Price", color='pink')
+    axes[1, 2].plot(range(valid_steps-1), ask_price, label="Ask Price", color='cyan')
+    axes[1, 2].plot(range(valid_steps-1), averageMidprice, label="Average Mid Price", color='magenta')
+    #axes[1, 2].plot(range(valid_steps-1), book_vol_av_bid, label="book_vol_av_bid", color='red')
+   # axes[1, 2].plot(range(valid_steps-1), book_vol_av_ask, label="book_vol_av_ask", color='blue')
     axes[1, 2].set_xlabel("Steps")
     axes[1, 2].set_ylabel("Price")
     axes[1, 2].set_title("Bid, Ask & Mid Price Over Steps")
