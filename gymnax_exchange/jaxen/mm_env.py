@@ -802,7 +802,7 @@ class MarketMakingEnv(BaseLOBEnv):
             elif action.shape[0]//2 == 2:
                 return FT, NT, MKT
             elif action.shape[0]//2 == 1:
-                return PP, MKT
+                return NT, MKT
 
         def sell_task_prices(best_ask, best_bid):
             # FT = best_bid
@@ -821,7 +821,7 @@ class MarketMakingEnv(BaseLOBEnv):
             elif action.shape[0]//2 == 2:
                 return FT, NT, MKT
             elif action.shape[0]//2 == 1:
-                return PP, MKT
+                return NT, MKT
 
         # ============================== Get Action_msgs ==============================
         # --------------- 01 rest info for deciding action_msgs ---------------
@@ -1106,7 +1106,8 @@ class MarketMakingEnv(BaseLOBEnv):
         # reward /= 10_000
         reward_scaled = reward / 100_000
         # reward /= params.avg_twap_list[state.window_index]
-        return reward_scaled, {
+        #RETURNING UN-NORMALISED REWARD FOR PLOTTING
+        return reward, {
             "market_share": market_share,
             "undamped_reward":undamped_reward,
             "revenue": pnl / 100_000,  # pure revenue is not informative if direction is random (-> flip and normalise)
