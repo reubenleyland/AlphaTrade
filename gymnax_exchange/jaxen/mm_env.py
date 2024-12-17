@@ -229,6 +229,7 @@ class MarketMakingEnv(BaseLOBEnv):
         #print(action)
         action_msgs = self._getActionMsgs(action, state, params)
         action_prices = action_msgs[:, 3]
+        
      
         #jax.debug.print('action_msgs\n {}', action_msgs)
         #Need cancel messages for bid and for ask:
@@ -302,6 +303,7 @@ class MarketMakingEnv(BaseLOBEnv):
                 state.best_bids[-1, 0]
             )
         )
+       # jax.debug.print("bestasks {}",bestasks)
        # jax.debug.print('agent_id {}, trades {}', self.trader_unique_id, trades)
         # filter to trades by our agent (rest are 0s)
 
@@ -340,11 +342,15 @@ class MarketMakingEnv(BaseLOBEnv):
         (asks, bids, trades), (new_bestask, new_bestbid), new_id_counter, new_time, mkt_exec_quant, doom_quant = \
             self._force_market_order_if_done(
                  bestasks[-1], bestbids[-1], time, asks, bids, trades, state, params)
+        #jax.debug.print("new_bestask\n {}", new_bestask)
+        #jax.debug.print("bestasks {}",bestasks[-1][0])
 
         bestasks = jnp.concatenate([bestasks, jnp.resize(new_bestask, (1, 2))], axis=0, dtype=jnp.int32)
         bestbids = jnp.concatenate([bestbids, jnp.resize(new_bestbid, (1, 2))], axis=0, dtype=jnp.int32)
 
-        # jax.debug.print("bestasks\n {}", bestasks)
+        #jax.debug.print("bestasks[-1]\n {}", bestasks[-1][0])
+        #jax.debug.print("bestasks[-2]\n {}", bestasks[-2][0])
+
         
         bid_passive_2,quant_bid_passive_2,ask_passive_2,quant_ask_passive_2 = self._get_pass_price_quant(state)
         #jax.debug.print('price_passive_2: {}, quant_passive_2: {}', price_passive_2, quant_passive_2)
@@ -400,6 +406,10 @@ class MarketMakingEnv(BaseLOBEnv):
         )
         done = self.is_terminal(state, params)
         other_exec_quants=extras["other_exec_quants"]
+        average_best_bid=bestbids[:, 0].mean()// self.tick_size * self.tick_size
+        average_best_ask=bestasks[:, 0].mean()// self.tick_size * self.tick_size
+        #jax.debug.print("averageMidprice {}", averageMidprice)
+       # jax.debug.print("average_best_ask {}",average_best_ask)
         #book_vol_av_ask=(state.ask_raw_orders[:,0]/state.ask_raw_orders[:,1]).mean()*(state.ask_raw_orders[:,1].sum())
         #book_vol_av_bid = (state.bid_raw_orders[:, 0] / state.bid_raw_orders[:, 1]).mean() * (state.bid_raw_orders[:, 1].sum())
 
@@ -433,7 +443,9 @@ class MarketMakingEnv(BaseLOBEnv):
             "other_exec_quants":extras["other_exec_quants"],
             "averageMidprice":extras["averageMidprice"],
             "action_prices_0":action_prices[0],
-            "action_prices_1":action_prices[1]
+            "action_prices_1":action_prices[1],
+            "average_best_bid":average_best_bid,
+            "average_best_ask":average_best_ask
             #"book_vol_av_ask":book_vol_av_ask,
             #"book_vol_av_bid":book_vol_av_bid
 
@@ -937,7 +949,7 @@ class MarketMakingEnv(BaseLOBEnv):
         def place_doom_trade(trades, price, quant, time):
             doom_trade = job.create_trade(
                 price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time, self.trader_unique_id, -666666)
-            # jax.debug.print('doom_trade\n {}', doom_trade)
+           # jax.debug.print('doom_trade\n {}', doom_trade)
             trades = job.add_trade(trades, doom_trade)
             return trades
 
@@ -950,18 +962,20 @@ class MarketMakingEnv(BaseLOBEnv):
         order_msg, id_counter, time = jax.lax.cond(
             ep_is_over,
             create_mkt_order,
+            #create_dummy_order,
             create_dummy_order
         )
-        # jax.debug.print('market order msg: {}', order_msg)
-        # jax.debug.print('remainingTime: {}, ep_is_over: {}, order_msg: {}, time: {}', remainingTime, ep_is_over, order_msg, time)
+        #jax.debug.print('market order msg: {}', order_msg)
+       # jax.debug.print('remainingTime: {}, ep_is_over: {}, order_msg: {}, time: {}', remainingTime, ep_is_over, order_msg, time)
 
-        # jax.debug.print("trades before mkt\n {}", trades[:20])
-
+        #jax.debug.print("trades before mkt\n {}", trades[:20])
+       # jax.debug.print("best ask\n {}", bestask)
         (asks, bids, trades), (new_bestask, new_bestbid) = job.cond_type_side_save_bidask(
             (asks, bids, trades),
             order_msg
         )
-        # jax.debug.print("trades after mkt\n {}", trades[:20])
+       # jax.debug.print("best ask new\n {}", new_bestask)
+       # jax.debug.print("trades after mkt\n {}", trades[:20])
 
         # make sure best prices use the most recent available price and are not negative
         bestask = jax.lax.cond(
@@ -1000,7 +1014,7 @@ class MarketMakingEnv(BaseLOBEnv):
         # jax.debug.print('best_ask: {}; best_bid {}', bestask, bestbid)
         # jax.debug.print('ep_is_over: {}; quant_still_left: {}; remainingTime: {}', ep_is_over, quant_still_left, remainingTime)
         trades = jax.lax.cond(
-            ep_is_over & (quant_still_left > 0),
+            ep_is_over & (quant_still_left > 1000000000),
             place_doom_trade,
             lambda trades, b, c, d: trades,
             trades, doom_price, quant_still_left, time
@@ -1428,15 +1442,15 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,1521):
+    for i in range(1,2000):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
-        test_action = env.action_space().sample(key_policy) // 10
-        #test_action=jnp.array([1,1])
+        #test_action = env.action_space().sample(key_policy) // 10
+        test_action=jnp.array([0,0])
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)

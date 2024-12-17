@@ -34,7 +34,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 480 * 50,  # 60 seconds
+        "EPISODE_TIME": 60 * 50,  # 60 seconds
     }
 
     # Set up random keys for JAX
@@ -82,6 +82,10 @@ if __name__ == "__main__":
     state_best_ask = np.zeros((test_steps, 1), dtype=int)
     state_best_bid = np.zeros((test_steps, 1), dtype=int)
     averageMidprice = np.zeros((test_steps, 1), dtype=int)
+    average_best_bid =np.zeros((test_steps, 1), dtype=int)
+    average_best_ask =np.zeros((test_steps, 1), dtype=int)
+   
+
    # book_vol_av_bid= np.zeros((test_steps, 1), dtype=int)
    # book_vol_av_ask = np.zeros((test_steps, 1), dtype=int)
 
@@ -111,6 +115,9 @@ if __name__ == "__main__":
         bid_price[i] = info["action_prices_0"]  # Store best ask
         ask_price[i] = info["action_prices_1"]  # Store best bid
         averageMidprice[i] = info["averageMidprice"]  # Store mid price
+        average_best_bid[i]=info["average_best_bid"]
+        average_best_ask[i]=info["average_best_ask"]
+        
     #    book_vol_av_bid[i]=info["book_vol_av_bid"]
      #   book_vol_av_ask[i]=info["book_vol_av_ask"]
        # state_best_ask[i] = state.best_asks[-1,0]
@@ -133,6 +140,8 @@ if __name__ == "__main__":
     bid_price = bid_price[:valid_steps-1]
     ask_price = ask_price[:valid_steps-1]
     averageMidprice = averageMidprice[:valid_steps-1]
+    average_best_bid =average_best_bid[:valid_steps-1]
+    average_best_ask =average_best_ask[:valid_steps-1]
     #state_best_bid = state_best_bid[:valid_steps-1]
        # state_best_ask = state_best_ask[:valid_steps-1]
    # book_vol_av_bid= book_vol_av_bid[:valid_steps-1]
@@ -189,8 +198,8 @@ if __name__ == "__main__":
     axes[1, 2].plot(range(valid_steps-1), bid_price, label="Bid Price", color='pink')
     axes[1, 2].plot(range(valid_steps-1), ask_price, label="Ask Price", color='cyan')
     axes[1, 2].plot(range(valid_steps-1), averageMidprice, label="Average Mid Price", color='magenta')
-    #axes[1, 2].plot(range(valid_steps-1), book_vol_av_bid, label="book_vol_av_bid", color='red')
-   # axes[1, 2].plot(range(valid_steps-1), book_vol_av_ask, label="book_vol_av_ask", color='blue')
+    #axes[1, 2].plot(range(valid_steps-1), average_best_bid, label="average_best_bid", color='red')
+    #axes[1, 2].plot(range(valid_steps-1), average_best_ask, label="average_best_ask", color='blue')
     axes[1, 2].set_xlabel("Steps")
     axes[1, 2].set_ylabel("Price")
     axes[1, 2].set_title("Bid, Ask & Mid Price Over Steps")

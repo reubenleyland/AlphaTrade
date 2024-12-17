@@ -376,6 +376,27 @@ def bid_cancel(msg,askside,bidside,trades):
                 trades (Array): Same as parameter, after processing
     """
     return askside,cancel_order(bidside,msg),trades
+def dummy(msg,askside,bidside,trades):
+    """Function for processing a dummy order. Returns the inputs
+
+        Parameters:
+                msg (Dict): Incoming message to process.
+                    quantity (Int): Quantity to buy/sell
+                    price (Int): Price of order
+                    orderid (Int): Unique ID in the book
+                    traderid (Int): Trader ID, rarely available
+                    time (Int): Time of arrival (full seconds)
+                    time_ns (Int): Time of arrival (remaining ns)
+                askside (Array): All ask orders in book
+                bidside (Array): All bid orders in book
+                trades (Array): Running count of all occured trades
+                
+        Returns:
+                askside (Array): Same as parameter
+                bidside (Array): Same as parameter
+                trades (Array): Same as parameter
+    """
+    return askside,bidside,trades
 
 
 def ask_lim(msg,askside,bidside,trades):
@@ -548,7 +569,7 @@ def cond_type_side_save_bidask(book_state,data):
                     the message in data
                 book_state_to_save (Int): best bid/ask price & quant
     """
-    askside,bidside,trades=book_state
+    askside,bidside,trades=book_state  
     msg={'side':data[1],
          'type':data[0],
          'price':data[3],
@@ -563,10 +584,11 @@ def cond_type_side_save_bidask(book_state,data):
     index = ((((s == -1) & (t == 1)) | ((s ==  1) & (t == 4))) * 0
              + (((s ==  1) & (t == 1)) | ((s == -1) & (t == 4))) * 1 
              + (((s == -1) & (t == 2)) | ((s == -1) & (t == 3))) * 2
-             + (((s ==  1) & (t == 2)) | ((s ==  1) & (t == 3))) * 3)
+             + (((s ==  1) & (t == 2)) | ((s ==  1) & (t == 3))) * 3
+             +((s==0)&(t==0))*4)
     ask, bid, trade = jax.lax.switch(index,
                                      (ask_lim, bid_lim,
-                                       ask_cancel, bid_cancel),
+                                       ask_cancel, bid_cancel,dummy),
                                      msg,
                                      askside,
                                      bidside,
