@@ -17,7 +17,7 @@ faulthandler.enable()
 # ============================
 # Configuration
 # ============================
-test_steps = 1000
+test_steps = 1500  # Adjusted for your test case; make sure this isn't too high
 
 if __name__ == "__main__":
     try:
@@ -67,24 +67,33 @@ if __name__ == "__main__":
     # ============================
     # Initialize data storage
     # ============================
-    reward_file = 'gymnax_exchange/test_scripts/test_outputs/data.csv'
+    reward_file = 'gymnax_exchange/test_scripts/test_outputs/data.csv'  # Relative path
+    
+    # Ensure the directory exists, if not, create it
+    os.makedirs(os.path.dirname(reward_file), exist_ok=True)
     
     rewards = np.zeros((test_steps, 1), dtype=int)
     inventory = np.zeros((test_steps, 1), dtype=int)
     total_revenue = np.zeros((test_steps, 1), dtype=int)
     buyQuant = np.zeros((test_steps, 1), dtype=int)
     sellQuant = np.zeros((test_steps, 1), dtype=int)
+    bid_price = np.zeros((test_steps, 1), dtype=int)
+    ask_price = np.zeros((test_steps, 1), dtype=int)
+    averageMidprice = np.zeros((test_steps, 1), dtype=int)
+
+    # ============================
+    # Track the number of valid steps
+    # ============================
+    valid_steps = 0
 
     # ============================
     # Run the test loop
     # ============================
-    for i in range(1, test_steps):
+    for i in range(test_steps):
         # ==================== ACTION ====================
-        
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
         test_action = jnp.array([1, 1])
-        #print(f"Sampled {i}th actions are: ", test_action)
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
@@ -95,19 +104,37 @@ if __name__ == "__main__":
         total_revenue[i] = state.total_revenue
         buyQuant[i] = info["buyQuant"]
         sellQuant[i] = info["sellQuant"]
+        bid_price[i] = info["action_prices_0"]  # Store best ask
+        ask_price[i] = info["action_prices_1"]  # Store best bid
+        averageMidprice[i] = info["averageMidprice"]  # Store mid price
 
+        # Increment valid steps
+        valid_steps += 1
+        
         if done:
             print("===" * 20)
             break
 
     # ============================
+    # Clip the arrays to remove trailing zeros
+    # ============================
+    rewards = rewards[:valid_steps]
+    inventory = inventory[:valid_steps]
+    total_revenue = total_revenue[:valid_steps]
+    buyQuant = buyQuant[:valid_steps]
+    sellQuant = sellQuant[:valid_steps]
+    bid_price = bid_price[:valid_steps]
+    ask_price = ask_price[:valid_steps]
+    averageMidprice = averageMidprice[:valid_steps]
+
+    # ============================
     # Save all data to CSV
     # ============================
     # Combine all data into a single 2D array (each column is one metric)
-    data = np.hstack([rewards, inventory, total_revenue, buyQuant, sellQuant])
+    data = np.hstack([rewards, inventory, total_revenue, buyQuant, sellQuant, bid_price, ask_price, averageMidprice])
     
     # Add column headers
-    column_names = ['Reward', 'Inventory', 'Total Revenue', 'Buy Quantity', 'Sell Quantity']
+    column_names = ['Reward', 'Inventory', 'Total Revenue', 'Buy Quantity', 'Sell Quantity', 'Bid Price', 'Ask Price', 'averageMidprice']
     
     # Save data using pandas to handle CSV easily
     df = pd.DataFrame(data, columns=column_names)
@@ -115,40 +142,51 @@ if __name__ == "__main__":
     
     print(f"Data saved to {reward_file}")
 
-  # ============================
+    # ============================
     # Plotting all metrics on one page
     # ============================
-    # Create a figure with subplots (2 rows and 3 columns for example)
-    fig, axes = plt.subplots(3, 2, figsize=(15, 15))  # Adjust the grid as needed
+    # Create a figure with subplots (3 rows and 3 columns to fit the new data)
+    fig, axes = plt.subplots(3, 3, figsize=(15, 15))  # Adjust the grid as needed
 
     # Plot each metric on a separate subplot
-    axes[0, 0].plot(range(test_steps), rewards, label="Reward", color='blue')
+    axes[0, 0].plot(range(valid_steps), rewards, label="Reward", color='blue')
     axes[0, 0].set_xlabel("Steps")
     axes[0, 0].set_ylabel("Reward")
     axes[0, 0].set_title("Rewards Over Steps")
     
-    axes[0, 1].plot(range(test_steps), inventory, label="Inventory", color='green')
+    axes[0, 1].plot(range(valid_steps), inventory, label="Inventory", color='green')
     axes[0, 1].set_xlabel("Steps")
     axes[0, 1].set_ylabel("Inventory")
     axes[0, 1].set_title("Inventory Over Steps")
     
-    axes[1, 0].plot(range(test_steps), total_revenue, label="Total Revenue", color='orange')
+    axes[0, 2].plot(range(valid_steps), total_revenue, label="Total Revenue", color='orange')
+    axes[0, 2].set_xlabel("Steps")
+    axes[0, 2].set_ylabel("Total Revenue")
+    axes[0, 2].set_title("Total Revenue Over Steps")
+    
+    axes[1, 0].plot(range(valid_steps), buyQuant, label="Buy Quantity", color='red')
     axes[1, 0].set_xlabel("Steps")
-    axes[1, 0].set_ylabel("Total Revenue")
-    axes[1, 0].set_title("Total Revenue Over Steps")
+    axes[1, 0].set_ylabel("Buy Quantity")
+    axes[1, 0].set_title("Buy Quantity Over Steps")
     
-    axes[1, 1].plot(range(test_steps), buyQuant, label="Buy Quantity", color='red')
+    axes[1, 1].plot(range(valid_steps), sellQuant, label="Sell Quantity", color='purple')
     axes[1, 1].set_xlabel("Steps")
-    axes[1, 1].set_ylabel("Buy Quantity")
-    axes[1, 1].set_title("Buy Quantity Over Steps")
+    axes[1, 1].set_ylabel("Sell Quantity")
+    axes[1, 1].set_title("Sell Quantity Over Steps")
     
-    axes[2, 0].plot(range(test_steps), sellQuant, label="Sell Quantity", color='purple')
-    axes[2, 0].set_xlabel("Steps")
-    axes[2, 0].set_ylabel("Sell Quantity")
-    axes[2, 0].set_title("Sell Quantity Over Steps")
-    
-    # Turn off the empty subplot (3, 2) position
+    # Combined plot for Bid Price, Ask Price, and Average Mid Price
+    axes[1, 2].plot(range(valid_steps), bid_price, label="Bid Price", color='pink')
+    axes[1, 2].plot(range(valid_steps), ask_price, label="Ask Price", color='cyan')
+    axes[1, 2].plot(range(valid_steps), averageMidprice, label="Average Mid Price", color='magenta')
+    axes[1, 2].set_xlabel("Steps")
+    axes[1, 2].set_ylabel("Price")
+    axes[1, 2].set_title("Bid, Ask & Mid Price Over Steps")
+    axes[1, 2].legend()
+
+    # Turn off the empty subplot (3, 3) position
+    axes[2, 0].axis('off')
     axes[2, 1].axis('off')
+    axes[2, 2].axis('off')
     
     # Adjust layout to prevent overlapping
     plt.tight_layout()

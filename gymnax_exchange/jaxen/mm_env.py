@@ -426,7 +426,10 @@ class MarketMakingEnv(BaseLOBEnv):
             "total_bid_quant_before_step":total_bid_quant_before_step,
             "buyQuant":extras["buyQuant"],
             "sellQuant":extras["sellQuant"],
-            "other_exec_quants":extras["other_exec_quants"]
+            "other_exec_quants":extras["other_exec_quants"],
+            "averageMidprice":extras["averageMidprice"],
+            "action_prices_0":action_prices[0],
+            "action_prices_1":action_prices[1]
 
         }
         
@@ -1116,7 +1119,8 @@ class MarketMakingEnv(BaseLOBEnv):
             "agentQuant":inventory_delta,
             "buyQuant":buyQuant,
             "sellQuant":sellQuant,
-            "other_exec_quants":other_exec_quants
+            "other_exec_quants":other_exec_quants,
+            "averageMidprice": averageMidprice
         }
 
     def _get_obs(
