@@ -113,8 +113,8 @@ if __name__ == "__main__":
         
         # Store data
         rewards[i] = reward
-        inventory[i] = state.inventory
-        total_revenue[i] = state.total_revenue
+        inventory[i] = info["inventory"]
+        total_revenue[i] = info["total_revenue"]
         buyQuant[i] = info["buyQuant"]
         sellQuant[i] = info["sellQuant"]
         bid_price[i] = info["action_prices_0"]  # Store best ask
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     # Clip the arrays to remove trailing zeros
     # ============================
 
-    plot_until_step = valid_steps-1
+    plot_until_step = valid_steps
 
     rewards = rewards[:plot_until_step]
     inventory = inventory[:plot_until_step]
