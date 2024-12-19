@@ -32,7 +32,7 @@ if __name__ == "__main__":
         "MAX_TASK_SIZE": 100,
         "WINDOW_INDEX": 200,
         "ACTION_TYPE": "pure",
-        "REWARD_LAMBDA": 0,
+        "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
         "EPISODE_TIME": 60 * 50,  # 60 seconds
     }
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # Define environment parameters
     env_params = dataclasses.replace(
         env.default_params,
-        reward_lambda=0.00001,
+        reward_lambda=0.0001,
         episode_time=config["EPISODE_TIME"],  # in seconds
     )
 
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     plt.tight_layout()
 
     # Save the combined plots as a single image
-    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_symmetrically_dampened_small_lambda.png'
+    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_complex.png'
     plt.savefig(combined_plot_file)
     plt.close()
 
