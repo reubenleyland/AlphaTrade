@@ -150,9 +150,9 @@ if __name__ == "__main__":
     averageMidprice = averageMidprice[:valid_steps-1]
     average_best_bid =average_best_bid[:valid_steps-1]
     average_best_ask =average_best_ask[:valid_steps-1]
-    inventory_pnl = inventory_pnl[:valid_steps]
-    realized_pnl = realized_pnl[:valid_steps]
-    unrealized_pnl = unrealized_pnl[:valid_steps]
+    inventory_pnl = inventory_pnl[:valid_steps-1]
+    realized_pnl = realized_pnl[:valid_steps-1]
+    unrealized_pnl = unrealized_pnl[:valid_steps-1]
     #state_best_bid = state_best_bid[:valid_steps-1]
        # state_best_ask = state_best_ask[:valid_steps-1]
    # book_vol_av_bid= book_vol_av_bid[:valid_steps-1]
@@ -218,17 +218,17 @@ if __name__ == "__main__":
     axes[1, 2].set_title("Bid, Ask & Mid Price Over Steps")
     axes[1, 2].legend()
 
-    axes[2, 0].plot(range(valid_steps), inventory_pnl, label="Inventory PnL", color='gold')
+    axes[2, 0].plot(range(valid_steps-1), inventory_pnl, label="Inventory PnL", color='gold')
     axes[2, 0].set_xlabel("Steps")
     axes[2, 0].set_ylabel("Inventory PnL")
     axes[2, 0].set_title("Inventory PnL Over Steps")
 
-    axes[2, 1].plot(range(valid_steps), realized_pnl, label="Realized PnL", color='orange')
+    axes[2, 1].plot(range(valid_steps-1), realized_pnl, label="Realized PnL", color='orange')
     axes[2, 1].set_xlabel("Steps")
     axes[2, 1].set_ylabel("Realized PnL")
     axes[2, 1].set_title("Realized PnL Over Steps")
 
-    axes[2, 2].plot(range(valid_steps), unrealized_pnl, label="Unrealized PnL", color='purple')
+    axes[2, 2].plot(range(valid_steps-1), unrealized_pnl, label="Unrealized PnL", color='purple')
     axes[2, 2].set_xlabel("Steps")
     axes[2, 2].set_ylabel("Unrealized PnL")
     axes[2, 2].set_title("Unrealized PnL Over Steps")
