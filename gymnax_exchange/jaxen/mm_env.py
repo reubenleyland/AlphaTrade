@@ -174,7 +174,7 @@ class EnvParams(BaseEnvParams):
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=0, ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=0.1, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -445,7 +445,10 @@ class MarketMakingEnv(BaseLOBEnv):
             "action_prices_0":action_prices[0],
             "action_prices_1":action_prices[1],
             "average_best_bid":average_best_bid,
-            "average_best_ask":average_best_ask
+            "average_best_ask":average_best_ask,
+            "InventoryPnL":extras["InventoryPnL"],
+            "approx_realized_pnl":extras["approx_realized_pnl"],
+            "approx_unrealized_pnl": extras["approx_unrealized_pnl"]
             #"book_vol_av_ask":book_vol_av_ask,
             #"book_vol_av_bid":book_vol_av_bid
 
@@ -1088,6 +1091,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
         # Multiply PnL from inventory with small lambda to dampen the effect
         #reward=buyPnL+sellPnL + self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
+        reward= InventoryPnL
 
         # Other versions of reward
         #reward=buyPnL+sellPnL + InventoryPnL # full speculation
@@ -1098,17 +1102,17 @@ class MarketMakingEnv(BaseLOBEnv):
 
         #More complex reward function (should be added as part of the env if we actually use them):
         inventoryPnL_lambda = 0.0001
-        unrealizedPnL_lambda = 0.5
+        unrealizedPnL_lambda = 1
         asymmetrically_dampened_lambda = 0.5
         avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / buyQuant, 0)
         avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0] * jnp.abs(agent_sells[:, 1])).sum() / sellQuant, 0)
-        approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price)
+        approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price) / self.tick_size
         approx_unrealized_pnl = jnp.where( 
             inventory_delta > 0,
-            inventory_delta * (averageMidprice - avg_buy_price),  # Excess buys
-            jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice)  # Excess sells
+            inventory_delta * (averageMidprice - avg_buy_price) / self.tick_size,  # Excess buys
+            jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice) / self.tick_size # Excess sells
         )
-        reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
+        #reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
 
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
@@ -1142,6 +1146,8 @@ class MarketMakingEnv(BaseLOBEnv):
             "buyQuant":buyQuant,
             "sellQuant":sellQuant,
             "approx_realized_pnl":approx_realized_pnl,
+            "approx_unrealized_pnl" : approx_unrealized_pnl,
+            "InventoryPnL":InventoryPnL,
             "other_exec_quants":other_exec_quants,
             "averageMidprice": averageMidprice
         }

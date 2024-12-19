@@ -17,7 +17,7 @@ faulthandler.enable()
 # ============================
 # Configuration
 # ============================
-test_steps = 3000  # Adjusted for your test case; make sure this isn't too high
+test_steps = 702  # Adjusted for your test case; make sure this isn't too high
 
 if __name__ == "__main__":
     try:
@@ -86,6 +86,9 @@ if __name__ == "__main__":
     averageMidprice = np.zeros((test_steps, 1), dtype=int)
     average_best_bid =np.zeros((test_steps, 1), dtype=int)
     average_best_ask =np.zeros((test_steps, 1), dtype=int)
+    inventory_pnl = np.zeros((test_steps, 1), dtype=int)    
+    realized_pnl = np.zeros((test_steps, 1), dtype=int)   
+    unrealized_pnl = np.zeros((test_steps, 1), dtype=int) 
    
 
    # book_vol_av_bid= np.zeros((test_steps, 1), dtype=int)
@@ -119,6 +122,9 @@ if __name__ == "__main__":
         averageMidprice[i] = info["averageMidprice"]  # Store mid price
         average_best_bid[i]=info["average_best_bid"]
         average_best_ask[i]=info["average_best_ask"]
+        inventory_pnl[i] = info["InventoryPnL"]  
+        realized_pnl[i] = info["approx_realized_pnl"]  
+        unrealized_pnl[i] = info["approx_unrealized_pnl"] 
         
     #    book_vol_av_bid[i]=info["book_vol_av_bid"]
      #   book_vol_av_ask[i]=info["book_vol_av_ask"]
@@ -144,6 +150,9 @@ if __name__ == "__main__":
     averageMidprice = averageMidprice[:valid_steps-1]
     average_best_bid =average_best_bid[:valid_steps-1]
     average_best_ask =average_best_ask[:valid_steps-1]
+    inventory_pnl = inventory_pnl[:valid_steps]
+    realized_pnl = realized_pnl[:valid_steps]
+    unrealized_pnl = unrealized_pnl[:valid_steps]
     #state_best_bid = state_best_bid[:valid_steps-1]
        # state_best_ask = state_best_ask[:valid_steps-1]
    # book_vol_av_bid= book_vol_av_bid[:valid_steps-1]
@@ -163,6 +172,8 @@ if __name__ == "__main__":
     df.to_csv(reward_file, index=False)
     
     print(f"Data saved to {reward_file}")
+    
+    print(f"Last valid step {valid_steps}")
 
     # ============================
     # Plotting all metrics on one page
@@ -207,16 +218,31 @@ if __name__ == "__main__":
     axes[1, 2].set_title("Bid, Ask & Mid Price Over Steps")
     axes[1, 2].legend()
 
+    axes[2, 0].plot(range(valid_steps), inventory_pnl, label="Inventory PnL", color='gold')
+    axes[2, 0].set_xlabel("Steps")
+    axes[2, 0].set_ylabel("Inventory PnL")
+    axes[2, 0].set_title("Inventory PnL Over Steps")
+
+    axes[2, 1].plot(range(valid_steps), realized_pnl, label="Realized PnL", color='orange')
+    axes[2, 1].set_xlabel("Steps")
+    axes[2, 1].set_ylabel("Realized PnL")
+    axes[2, 1].set_title("Realized PnL Over Steps")
+
+    axes[2, 2].plot(range(valid_steps), unrealized_pnl, label="Unrealized PnL", color='purple')
+    axes[2, 2].set_xlabel("Steps")
+    axes[2, 2].set_ylabel("Unrealized PnL")
+    axes[2, 2].set_title("Unrealized PnL Over Steps")
+
     # Turn off the empty subplot (3, 3) position
-    axes[2, 0].axis('off')
-    axes[2, 1].axis('off')
-    axes[2, 2].axis('off')
+    #axes[2, 0].axis('off')
+    #axes[2, 1].axis('off')
+    #axes[2, 2].axis('off')
     
     # Adjust layout to prevent overlapping
     plt.tight_layout()
 
     # Save the combined plots as a single image
-    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_complex.png'
+    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_inventory_pnl_702.png'
     plt.savefig(combined_plot_file)
     plt.close()
 
