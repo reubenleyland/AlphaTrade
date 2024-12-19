@@ -649,6 +649,13 @@ def make_train(config):
                     return_values = info["returned_episode_returns"]
                     revenues = info["total_revenue"]
                     inventories = info["inventory"] 
+                    total_ask_quant_before_step=info["total_ask_quant_before_step"]
+                    total_bid_quant_before_step=info["total_bid_quant_before_step"]
+                    buyQuant=info["buyQuant"]
+                    sellQuant=info["sellQuant"]
+                    market_share=info["market_share"]
+                    other_exec_quants=info["other_exec_quants"]
+
 
 
                     timesteps = (
@@ -710,6 +717,12 @@ def make_train(config):
                                 "episodic_return": jnp.mean(return_values) if return_values.size > 0 else 0,  # Handle empty arrays
                                 "episodic_revenue": jnp.mean(revenues) if revenues.size > 0 else 0,  # Handle empty arrays
                                 "inventory": jnp.mean(inventories) if inventories.size > 0 else 0, 
+                                "total_ask_quant_before_step":jnp.mean(total_ask_quant_before_step) if total_ask_quant_before_step.size > 0 else 0,
+                                "total_bid_quant_before_step":jnp.mean(total_bid_quant_before_step) if total_bid_quant_before_step.size > 0 else 0,
+                                "buyQuant":jnp.mean(buyQuant) if buyQuant.size > 0 else 0,
+                                "sellQuant":jnp.mean(sellQuant) if sellQuant.size > 0 else 0,
+                                "market_share":jnp.mean(market_share) if market_share.size > 0 else 0,
+                                "other_exec_quants":jnp.mean(other_exec_quants) if other_exec_quants.size > 0 else 0,
                                 #"quant_executed": jnp.mean(quant_executed), #quant_executed[t],
                                 #"average_price": jnp.mean(average_price), #average_price[t],
                                 # "slippage_rm":slippage_rm[t],
@@ -803,7 +816,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure", # "delta"
         "MAX_TASK_SIZE": 100,
         #"TASK_SIZE": 100, # 500,
-        "EPISODE_TIME": 60 * 5, # time in seconds
+        "EPISODE_TIME": 60* 500, # time in seconds
         "DATA_TYPE": "fixed_time", # "fixed_time", "fixed_steps"
         "CONT_ACTIONS": False,  # True
         "JOINT_ACTOR_CRITIC_NET": True,  # True, False
