@@ -799,7 +799,7 @@ if __name__ == "__main__":
         "DEBUG": True,
         
         "TASKSIDE": "random", # "random", "buy", "sell"
-        "REWARD_LAMBDA": .1, #0.001,
+        "REWARD_LAMBDA": .0001, #0.001,
         "ACTION_TYPE": "pure", # "delta"
         "MAX_TASK_SIZE": 100,
         #"TASK_SIZE": 100, # 500,
