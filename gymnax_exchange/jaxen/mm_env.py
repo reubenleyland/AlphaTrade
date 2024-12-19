@@ -1097,7 +1097,6 @@ class MarketMakingEnv(BaseLOBEnv):
         #More complex reward function (should be added as part of the env if we actually use them):
         inventoryPnL_lambda = 0.0001
         unrealizedPnL_lambda = 1
-        asymmetry_lambda = 0.5
         avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / buyQuant, 0)
         avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0] * jnp.abs(agent_sells[:, 1])).sum() / sellQuant, 0)
         approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price)

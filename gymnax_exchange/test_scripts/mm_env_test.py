@@ -30,7 +30,7 @@ if __name__ == "__main__":
         "ATFOLDER": ATFolder,
         "TASKSIDE": "buy",
         "MAX_TASK_SIZE": 100,
-        "WINDOW_INDEX": 1,
+        "WINDOW_INDEX": 200,
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0,
         "EP_TYPE": "fixed_time",
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     }
 
     # Set up random keys for JAX
-    rng = jax.random.PRNGKey(0)
+    rng = jax.random.PRNGKey(40)
     rng, key_reset, key_policy, key_step = jax.random.split(rng, 4)
 
     # Initialize the environment
@@ -61,8 +61,10 @@ if __name__ == "__main__":
     # Initialize the environment state
     start = time.time()
     obs, state = env.reset(key_reset, env_params)
+    print(f"Starting index in data: {state.start_index}")
     print("Time for reset: \n", time.time() - start)
     print("Inventory after reset: \n", state.inventory)
+    print(f"Number of available windows: {env.n_windows}")
 
     # ============================
     # Initialize data storage
@@ -101,7 +103,7 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
-        test_action = jnp.array([1, 1])
+        test_action = jnp.array([0, 0])
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
@@ -198,8 +200,8 @@ if __name__ == "__main__":
     axes[1, 2].plot(range(valid_steps-1), bid_price, label="Bid Price", color='pink')
     axes[1, 2].plot(range(valid_steps-1), ask_price, label="Ask Price", color='cyan')
     axes[1, 2].plot(range(valid_steps-1), averageMidprice, label="Average Mid Price", color='magenta')
-    #axes[1, 2].plot(range(valid_steps-1), average_best_bid, label="average_best_bid", color='red')
-    #axes[1, 2].plot(range(valid_steps-1), average_best_ask, label="average_best_ask", color='blue')
+    axes[1, 2].plot(range(valid_steps-1), average_best_bid, label="average_best_bid", color='red')
+    axes[1, 2].plot(range(valid_steps-1), average_best_ask, label="average_best_ask", color='blue')
     axes[1, 2].set_xlabel("Steps")
     axes[1, 2].set_ylabel("Price")
     axes[1, 2].set_title("Bid, Ask & Mid Price Over Steps")
@@ -214,7 +216,7 @@ if __name__ == "__main__":
     plt.tight_layout()
 
     # Save the combined plots as a single image
-    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/plots.png'
+    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/plots7.png'
     plt.savefig(combined_plot_file)
     plt.close()
 
