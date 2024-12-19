@@ -174,7 +174,7 @@ class EnvParams(BaseEnvParams):
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=0.1, ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=0.001, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -1075,7 +1075,8 @@ class MarketMakingEnv(BaseLOBEnv):
         mid_price_end = (bestbids[-1][0] + bestasks[-1][0]) // 2 // self.tick_size * self.tick_size
            
         #Inventory PnL: 
-        InventoryPnL= (new_inventory*mid_price_end-state.inventory*state.mid_price) / self.tick_size
+        #InventoryPnL= (new_inventory*mid_price_end-state.inventory*state.mid_price) / self.tick_size
+        InventoryPnL= (state.inventory*mid_price_end-state.inventory*state.mid_price) / self.tick_size # new_mid * old inv - old mid * old inv
         #jax.debug.print("InventoryPnL {}", InventoryPnL)
         #Market Making PNL:
         ##This bit gets some design choices. make average?       
@@ -1090,8 +1091,8 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print("sellPnL {}", sellPnL)  
 
         # Multiply PnL from inventory with small lambda to dampen the effect
-        #reward=buyPnL+sellPnL + self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
-        reward= InventoryPnL
+        reward=buyPnL+sellPnL + self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
+        #reward= InventoryPnL
 
         # Other versions of reward
         #reward=buyPnL+sellPnL + InventoryPnL # full speculation
