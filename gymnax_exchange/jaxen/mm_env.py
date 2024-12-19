@@ -174,7 +174,7 @@ class EnvParams(BaseEnvParams):
 class MarketMakingEnv(BaseLOBEnv):
     def __init__(
             self, alphatradePath, task, window_index, action_type, episode_time,
-            max_task_size = 500, rewardLambda=0.0001, ep_type="fixed_time"):
+            max_task_size = 500, rewardLambda=0.000000001, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
         self.task = task # "random", "buy", "sell"
@@ -1097,17 +1097,17 @@ class MarketMakingEnv(BaseLOBEnv):
         #reward=buyPnL+sellPnL + InventoryPnL - (1-self.rewardLambda)*jnp.maximum(0,InventoryPnL) # Asymmetrically dampened PnL
 
         #More complex reward function (should be added as part of the env if we actually use them):
-        inventoryPnL_lambda = 0.0001
-        unrealizedPnL_lambda = 1
+        #inventoryPnL_lambda = 0.0001
+        #unrealizedPnL_lambda = 1
         avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / buyQuant, 0)
         avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0] * jnp.abs(agent_sells[:, 1])).sum() / sellQuant, 0)
         approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price)
-        approx_unrealized_pnl = jnp.where( 
-            inventory_delta > 0,
-            inventory_delta * (averageMidprice - avg_buy_price),  # Excess buys
-            jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice)  # Excess sells
-        )
-        reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  jnp.minimum(InventoryPnL,InventoryPnL*inventoryPnL_lambda) #Last term adds negative inventory PnL without dampening
+        #approx_unrealized_pnl = jnp.where( 
+        #    inventory_delta > 0,
+        #    inventory_delta * (averageMidprice - avg_buy_price),  # Excess buys
+        #    jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice)  # Excess sells
+        #)
+        #reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  jnp.minimum(InventoryPnL,InventoryPnL*inventoryPnL_lambda) #Last term adds negative inventory PnL without dampening
 
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
@@ -1428,7 +1428,7 @@ if __name__ == "__main__":
     # env_params=env.default_params
     env_params = dataclasses.replace(
         env.default_params,
-        reward_lambda=0.1,
+        reward_lambda=0.00001,
         #task_size=config["MAX_TASK_SIZE"],
         episode_time=config["EPISODE_TIME"],  # in seconds
     )

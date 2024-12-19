@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # Define environment parameters
     env_params = dataclasses.replace(
         env.default_params,
-        reward_lambda=0.1,
+        reward_lambda=0.00001,
         episode_time=config["EPISODE_TIME"],  # in seconds
     )
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
-        test_action = jnp.array([0, 0])
+        test_action = jnp.array([1, 1])
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     plt.tight_layout()
 
     # Save the combined plots as a single image
-    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/plots7.png'
+    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_symmetrically_dampened_small_lambda.png'
     plt.savefig(combined_plot_file)
     plt.close()
 
