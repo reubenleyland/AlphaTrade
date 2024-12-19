@@ -862,7 +862,9 @@ class MarketMakingEnv(BaseLOBEnv):
         # --------------- 01 rest info for deciding action_msgs ---------------
         
         # --------------- 02 info for deciding prices ---------------
-        best_ask, best_bid = state.best_asks[-1, 0], state.best_bids[-1, 0]
+       # best_ask, best_bid = state.best_asks[-1, 0], state.best_bids[-1, 0]
+        best_ask = jnp.int32((state.best_asks[-100:].mean(axis=0)[0] // self.tick_size) * self.tick_size)
+        best_bid = jnp.int32((state.best_bids[-100:].mean(axis=0)[0] // self.tick_size) * self.tick_size)
 
         sell_levels=sell_task_prices(best_ask, best_bid)
         sell_levels = jnp.array(sell_levels[:-1])
