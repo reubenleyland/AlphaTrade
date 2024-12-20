@@ -175,8 +175,10 @@ if __name__ == "__main__":
     df.to_csv(reward_file, index=False)
     
     print(f"Data saved to {reward_file}")
-    
+    print(f"Inventory PnL Mean: {inventory_pnl.mean()}")
     print(f"Last valid step {valid_steps}")
+    print(f"Last Revenue: {total_revenue[-1]}")
+    
 
     # ============================
     # Plotting all metrics on one page
@@ -247,8 +249,11 @@ if __name__ == "__main__":
     plt.tight_layout()
 
     # Save the combined plots as a single image
-    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_symmetrically_dampened_0.001_lambda_all_steps.png'
+    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_complex_all_steps.png'
     plt.savefig(combined_plot_file)
     plt.close()
+
+    
+   
 
     print(f"Combined plots saved to {combined_plot_file}")
