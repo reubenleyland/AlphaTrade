@@ -30,7 +30,7 @@ if __name__ == "__main__":
         "ATFOLDER": ATFolder,
         "TASKSIDE": "buy",
         "MAX_TASK_SIZE": 100,
-        "WINDOW_INDEX": 200,
+        "WINDOW_INDEX": 242,
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     }
 
     # Set up random keys for JAX
-    rng = jax.random.PRNGKey(40)
+    rng = jax.random.PRNGKey(50)
     rng, key_reset, key_policy, key_step = jax.random.split(rng, 4)
 
     # Initialize the environment
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     # Clip the arrays to remove trailing zeros
     # ============================
 
-    plot_until_step = valid_steps
+    plot_until_step = valid_steps 
 
     rewards = rewards[:plot_until_step]
     inventory = inventory[:plot_until_step]
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     plt.tight_layout()
 
     # Save the combined plots as a single image
-    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_complex_all_steps.png'
+    combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_symmetrically_dampened_0.0001_lambda_all_steps.png'
     plt.savefig(combined_plot_file)
     plt.close()
 

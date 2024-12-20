@@ -901,8 +901,8 @@ class MarketMakingEnv(BaseLOBEnv):
         #reward=buyPnL+sellPnL + InventoryPnL - (1-self.rewardLambda)*jnp.maximum(0,InventoryPnL) # Asymmetrically dampened PnL
 
         #More complex reward function (should be added as part of the env if we actually use them):
-        inventoryPnL_lambda = 0.001
-        unrealizedPnL_lambda = 1
+        inventoryPnL_lambda = 0.0002
+        unrealizedPnL_lambda = 0.2
         asymmetrically_dampened_lambda = 0.5
         avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / buyQuant, 0)
         avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0] * jnp.abs(agent_sells[:, 1])).sum() / sellQuant, 0)
@@ -912,7 +912,7 @@ class MarketMakingEnv(BaseLOBEnv):
             inventory_delta * (averageMidprice - avg_buy_price) / self.tick_size,  # Excess buys
             jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice) / self.tick_size # Excess sells
         )
-        reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
+        #reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
 
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
