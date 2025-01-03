@@ -17,7 +17,7 @@ faulthandler.enable()
 # ============================
 # Configuration
 # ============================
-test_steps = 702  # Adjusted for your test case; make sure this isn't too high
+test_steps = 1500 # Adjusted for your test case; make sure this isn't too high
 
 if __name__ == "__main__":
     try:
@@ -30,11 +30,11 @@ if __name__ == "__main__":
         "ATFOLDER": ATFolder,
         "TASKSIDE": "buy",
         "MAX_TASK_SIZE": 100,
-        "WINDOW_INDEX": 242,
+        "WINDOW_INDEX": 200,
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 60 * 50,  # 60 seconds
+        "EPISODE_TIME": 23400,  # 
     }
 
     # Set up random keys for JAX
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     
     rewards = np.zeros((test_steps, 1), dtype=int)
     inventory = np.zeros((test_steps, 1), dtype=int)
-    total_revenue = np.zeros((test_steps, 1), dtype=int)
+    total_PnL = np.zeros((test_steps, 1), dtype=int)
     buyQuant = np.zeros((test_steps, 1), dtype=int)
     sellQuant = np.zeros((test_steps, 1), dtype=int)
     bid_price = np.zeros((test_steps, 1), dtype=int)
@@ -89,6 +89,8 @@ if __name__ == "__main__":
     inventory_pnl = np.zeros((test_steps, 1), dtype=int)    
     realized_pnl = np.zeros((test_steps, 1), dtype=int)   
     unrealized_pnl = np.zeros((test_steps, 1), dtype=int) 
+    bid_price_PP = np.zeros((test_steps, 1), dtype=int)
+    ask_price_PP=np.zeros((test_steps, 1), dtype=int)
    
 
    # book_vol_av_bid= np.zeros((test_steps, 1), dtype=int)
@@ -106,7 +108,7 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
-        test_action = jnp.array([1, 1])
+        test_action = jnp.array([0,0,1,1])
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
@@ -114,11 +116,13 @@ if __name__ == "__main__":
         # Store data
         rewards[i] = reward
         inventory[i] = info["inventory"]
-        total_revenue[i] = info["total_revenue"]
+        total_PnL[i] = info["total_PnL"]
         buyQuant[i] = info["buyQuant"]
         sellQuant[i] = info["sellQuant"]
         bid_price[i] = info["action_prices_0"]  # Store best ask
-        ask_price[i] = info["action_prices_1"]  # Store best bid
+        bid_price_PP[i] = info["action_prices_1"]
+        ask_price[i] = info["action_prices_2"] 
+        ask_price_PP[i] = info["action_prices_3"]# Store best bid
         averageMidprice[i] = info["averageMidprice"]  # Store mid price
         average_best_bid[i]=info["average_best_bid"]
         average_best_ask[i]=info["average_best_ask"]
@@ -141,11 +145,11 @@ if __name__ == "__main__":
     # Clip the arrays to remove trailing zeros
     # ============================
 
-    plot_until_step = valid_steps 
+    plot_until_step = valid_steps -1
 
     rewards = rewards[:plot_until_step]
     inventory = inventory[:plot_until_step]
-    total_revenue = total_revenue[:plot_until_step] 
+    total_PnL = total_PnL[:plot_until_step] 
     buyQuant = buyQuant[:plot_until_step]
     sellQuant = sellQuant[:plot_until_step]
     bid_price = bid_price[:plot_until_step]
@@ -156,6 +160,8 @@ if __name__ == "__main__":
     inventory_pnl = inventory_pnl[:plot_until_step]
     realized_pnl = realized_pnl[:plot_until_step]
     unrealized_pnl = unrealized_pnl[:plot_until_step]
+    bid_price_PP =  bid_price_PP[:plot_until_step]
+    ask_price_PP =  ask_price_PP[:plot_until_step]
     #state_best_bid = state_best_bid[:valid_steps-1]
        # state_best_ask = state_best_ask[:valid_steps-1]
    # book_vol_av_bid= book_vol_av_bid[:valid_steps-1]
@@ -165,10 +171,10 @@ if __name__ == "__main__":
     # Save all data to CSV
     # ============================
     # Combine all data into a single 2D array (each column is one metric)
-    data = np.hstack([rewards, inventory, total_revenue, buyQuant, sellQuant, bid_price, ask_price, averageMidprice])
+    data = np.hstack([rewards, inventory, total_PnL, buyQuant, sellQuant, bid_price, ask_price, averageMidprice])
     
     # Add column headers
-    column_names = ['Reward', 'Inventory', 'Total Revenue', 'Buy Quantity', 'Sell Quantity', 'Bid Price', 'Ask Price', 'averageMidprice']
+    column_names = ['Reward', 'Inventory', 'Total PnL', 'Buy Quantity', 'Sell Quantity', 'Bid Price', 'Ask Price', 'averageMidprice']
     
     # Save data using pandas to handle CSV easily
     df = pd.DataFrame(data, columns=column_names)
@@ -177,7 +183,7 @@ if __name__ == "__main__":
     print(f"Data saved to {reward_file}")
     print(f"Inventory PnL Mean: {inventory_pnl.mean()}")
     print(f"Last valid step {valid_steps}")
-    print(f"Last Revenue: {total_revenue[-1]}")
+    print(f"Last PnL: {total_PnL[-1]}")
     
 
     # ============================
@@ -199,10 +205,10 @@ if __name__ == "__main__":
     axes[0, 1].set_ylabel("Inventory")
     axes[0, 1].set_title("Inventory Over Steps")
     
-    axes[0, 2].plot(range(plot_until_step), total_revenue, label="Total Revenue", color='orange')
+    axes[0, 2].plot(range(plot_until_step), total_PnL, label="Total PnL", color='orange')
     axes[0, 2].set_xlabel("Steps")
-    axes[0, 2].set_ylabel("Total Revenue")
-    axes[0, 2].set_title("Total Revenue Over Steps")
+    axes[0, 2].set_ylabel("Total PnL")
+    axes[0, 2].set_title("Total PnL Over Steps")
     
     axes[1, 0].plot(range(plot_until_step), buyQuant, label="Buy Quantity", color='red')
     axes[1, 0].set_xlabel("Steps")
@@ -218,11 +224,13 @@ if __name__ == "__main__":
     axes[1, 2].plot(range(plot_until_step), bid_price, label="Bid Price", color='pink')
     axes[1, 2].plot(range(plot_until_step), ask_price, label="Ask Price", color='cyan')
     axes[1, 2].plot(range(plot_until_step), averageMidprice, label="Average Mid Price", color='magenta')
-    axes[1, 2].plot(range(plot_until_step), average_best_bid, label="average_best_bid", color='red')
-    axes[1, 2].plot(range(plot_until_step), average_best_ask, label="average_best_ask", color='blue')
+    axes[1, 2].plot(range(plot_until_step), average_best_bid, label="Average Best Bid", color='red')
+    axes[1, 2].plot(range(plot_until_step), average_best_ask, label="Average Best Ask", color='blue')
+    axes[1, 2].plot(range(plot_until_step), bid_price_PP, label="Bid Price PP", color='orange')
+    axes[1, 2].plot(range(plot_until_step), ask_price_PP, label="Ask Price PP", color='green')
     axes[1, 2].set_xlabel("Steps")
     axes[1, 2].set_ylabel("Price")
-    axes[1, 2].set_title("Bid, Ask & Mid Price Over Steps")
+    axes[1, 2].set_title("Bid, Ask, Mid, and PP Prices Over Steps")
     axes[1, 2].legend()
 
     axes[2, 0].plot(range(plot_until_step), inventory_pnl, label="Inventory PnL", color='gold')
@@ -240,11 +248,6 @@ if __name__ == "__main__":
     axes[2, 2].set_ylabel("Unrealized PnL")
     axes[2, 2].set_title("Unrealized PnL Over Steps")
 
-    # Turn off the empty subplot (3, 3) position
-    #axes[2, 0].axis('off')
-    #axes[2, 1].axis('off')
-    #axes[2, 2].axis('off')
-    
     # Adjust layout to prevent overlapping
     plt.tight_layout()
 
@@ -252,8 +255,5 @@ if __name__ == "__main__":
     combined_plot_file = 'gymnax_exchange/test_scripts/test_outputs/reward_symmetrically_dampened_0.0001_lambda_all_steps.png'
     plt.savefig(combined_plot_file)
     plt.close()
-
-    
-   
 
     print(f"Combined plots saved to {combined_plot_file}")

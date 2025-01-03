@@ -647,13 +647,17 @@ def make_train(config):
                      #   info["returned_episode"]
                     #]
                     return_values = info["returned_episode_returns"]
-                    revenues = info["total_revenue"]
+                    PnL = info["total_PnL"]
                     inventories = info["inventory"] 
                    # total_ask_quant_before_step=info["total_ask_quant_before_step"]
                     #total_bid_quant_before_step=info["total_bid_quant_before_step"]
                     buyQuant=info["buyQuant"]
                     sellQuant=info["sellQuant"]
-                    market_share=info["market_share"]
+                    action_prices_0=info["action_prices_0"]
+                    action_prices_1=info["action_prices_1"]
+                    action_prices_2=info["action_prices_2"]
+                    action_prices_3=info["action_prices_3"]
+                    #market_share=info["market_share"]
                     other_exec_quants=info["other_exec_quants"]
 
 
@@ -715,13 +719,18 @@ def make_train(config):
                                 "update_step": update_step,
                                 "global_step": jnp.max(timesteps) if timesteps.size > 0 else 0, # timesteps[t],
                                 "episodic_return": jnp.mean(return_values) if return_values.size > 0 else 0,  # Handle empty arrays
-                                "episodic_revenue": jnp.mean(revenues) if revenues.size > 0 else 0,  # Handle empty arrays
+                                "PnL": jnp.mean(PnL) if PnL.size > 0 else 0,  # Handle empty arrays
                                 "inventory": jnp.mean(inventories) if inventories.size > 0 else 0, 
+                                "action_prices_0": jnp.mean(action_prices_0) if action_prices_0.size > 0 else 0,
+                                "action_prices_1": jnp.mean(action_prices_1) if action_prices_0.size > 0 else 0,
+                                "action_prices_2": jnp.mean(action_prices_2) if action_prices_0.size > 0 else 0,
+                                "action_prices_3": jnp.mean(action_prices_3) if action_prices_0.size > 0 else 0,
                                # "total_ask_quant_before_step":jnp.mean(total_ask_quant_before_step) if total_ask_quant_before_step.size > 0 else 0,
                                # "total_bid_quant_before_step":jnp.mean(total_bid_quant_before_step) if total_bid_quant_before_step.size > 0 else 0,
                                 "buyQuant":jnp.mean(buyQuant) if buyQuant.size > 0 else 0,
                                 "sellQuant":jnp.mean(sellQuant) if sellQuant.size > 0 else 0,
-                                "market_share":jnp.mean(market_share) if market_share.size > 0 else 0,
+
+                               # "market_share":jnp.mean(market_share) if market_share.size > 0 else 0,
                                 "other_exec_quants":jnp.mean(other_exec_quants) if other_exec_quants.size > 0 else 0,
                                 #"quant_executed": jnp.mean(quant_executed), #quant_executed[t],
                                 #"average_price": jnp.mean(average_price), #average_price[t],
@@ -807,7 +816,7 @@ if __name__ == "__main__":
         "ADAM_B2": 0.99,
         "ADAM_EPS": 1e-5,  # 1e-4, 1e-6
         
-        "ENV_NAME": "alphatradeExec-v0",
+        "ENV_NAME": "alphatradeMM-v0",
         "WINDOW_INDEX": 2, # 2 fix random episode #-1,
         "DEBUG": True,
         
@@ -816,7 +825,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure", # "delta"
         "MAX_TASK_SIZE": 100,
         #"TASK_SIZE": 100, # 500,
-        "EPISODE_TIME": 60* 50, # time in seconds
+        "EPISODE_TIME": 23400, # time in seconds
         "DATA_TYPE": "fixed_time", # "fixed_time", "fixed_steps"
         "CONT_ACTIONS": False,  # True
         "JOINT_ACTOR_CRITIC_NET": True,  # True, False

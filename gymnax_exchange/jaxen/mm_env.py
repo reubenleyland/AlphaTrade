@@ -148,7 +148,7 @@ class EnvState(BaseEnvState):
     init_price: int
     inventory:int
     mid_price:int
-    total_revenue: float
+    total_PnL: float
     bid_passive_2 :int
     quant_bid_passive_2 :int
     ask_passive_2:int
@@ -165,14 +165,14 @@ class MarketMakingEnv(BaseLOBEnv):
             max_task_size = 500, rewardLambda=0.0001, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
-        self.n_ticks_in_book = 2 # Depth of PP actions
+        self.n_ticks_in_book = 10 # Depth of PP actions
         self.action_type = action_type # 'delta' or 'pure'
         self.max_task_size = max_task_size #Functions as max trade size for us
         self.inventory=0
         self.market_share=0.
         self.rewardLambda = rewardLambda #
         # TODO: fix!! this can be overwritten in the base class
-        self.n_actions = 8 # 4: (FT, M, NT, PP), 3: (FT, NT, PP), 2 (FT, NT), 1 (FT)
+        self.n_actions = 4 # 4: (FT, M, NT, PP), 3: (FT, NT, PP), 2 (FT, NT), 1 (FT)
 
         #Call base-class init function
         super().__init__(
@@ -307,7 +307,7 @@ class MarketMakingEnv(BaseLOBEnv):
             init_price = state.init_price,
             mid_price=extras["mid_price"],
             inventory=extras["end_inventory"],
-            total_revenue = state.total_revenue + extras["revenue"],
+            total_PnL = state.total_PnL + extras["PnL"],
             bid_passive_2 = bid_passive_2,
             quant_bid_passive_2 = quant_bid_passive_2,
             ask_passive_2=ask_passive_2,
@@ -320,7 +320,7 @@ class MarketMakingEnv(BaseLOBEnv):
 
         info = {
             "window_index": state.window_index,
-            "total_revenue": state.total_revenue,                           
+            "total_PnL": state.total_PnL,                           
             "current_step": state.step_counter,
             "done": done,
             "inventory": state.inventory,
@@ -334,6 +334,8 @@ class MarketMakingEnv(BaseLOBEnv):
             "averageMidprice":extras["averageMidprice"],
             "action_prices_0":action_prices[0],
             "action_prices_1":action_prices[1],
+            "action_prices_2":action_prices[2],
+            "action_prices_3":action_prices[3],
             "average_best_bid":average_best_bid,
             "average_best_ask":average_best_ask,
             "InventoryPnL":extras["InventoryPnL"],
@@ -399,7 +401,7 @@ class MarketMakingEnv(BaseLOBEnv):
             init_price=M,
             mid_price=M,
             inventory=0,
-            total_revenue=0.,
+            total_PnL=0.,
             # updated on reset:
             bid_passive_2 = 0,
             quant_bid_passive_2 = 0,
@@ -656,7 +658,7 @@ class MarketMakingEnv(BaseLOBEnv):
             elif action.shape[0]//2 == 3:
                 return FT, NT, PP, MKT
             elif action.shape[0]//2 == 2:
-                return FT, NT, MKT
+                return NT, PP, MKT
             elif action.shape[0]//2 == 1:
                 return NT, MKT
 
@@ -675,7 +677,7 @@ class MarketMakingEnv(BaseLOBEnv):
             elif action.shape[0]//2 == 3:
                 return FT, NT, PP, MKT
             elif action.shape[0]//2 == 2:
-                return FT, NT, MKT
+                return NT, PP, MKT
             elif action.shape[0]//2 == 1:
                 return NT, MKT
 
@@ -890,7 +892,7 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print("sellPnL {}", sellPnL)  
 
         # Multiply PnL from inventory with small lambda to dampen the effect
-        reward=buyPnL+sellPnL + self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
+        #reward=buyPnL+sellPnL + self.rewardLambda * InventoryPnL # Symmetrically dampened PnL
         #reward= InventoryPnL
 
         # Other versions of reward
@@ -912,7 +914,7 @@ class MarketMakingEnv(BaseLOBEnv):
             inventory_delta * (averageMidprice - avg_buy_price) / self.tick_size,  # Excess buys
             jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice) / self.tick_size # Excess sells
         )
-        #reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
+        reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
 
 
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
@@ -925,7 +927,7 @@ class MarketMakingEnv(BaseLOBEnv):
         #jax.debug.print("Income {}",income)
         #jax.debug.print("outgoing {}",outgoing)
         
-        pnl=income-outgoing
+        PnL=income-outgoing
         #jax.debug.print("pnl {}",pnl)
         #calculate a fraction of total market activity attributable to us.
         other_exec_quants = jnp.abs(otherTrades[:, 1]).sum()
@@ -939,7 +941,7 @@ class MarketMakingEnv(BaseLOBEnv):
         return reward, {
             "market_share": market_share,
             "undamped_reward":undamped_reward,
-            "revenue": pnl,  # pure revenue is not informative if direction is random (-> flip and normalise)
+            "PnL": PnL,  # pure revenue is not informative if direction is random (-> flip and normalise)
             "end_inventory":new_inventory,
             "mid_price":mid_price_end,
             "agentQuant":inventory_delta,
@@ -985,7 +987,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "inventory" : state.inventory,
             "init_price": state.init_price,
             "mid_price":state.mid_price,
-            "total_revenue" : state.total_revenue,
+            "total_PnL" : state.total_PnL,
             "step_counter": state.step_counter,
             "max_steps": state.max_steps_in_episode,
             "remaining_ratio": jnp.where(state.max_steps_in_episode==0, 0., 1. - state.step_counter / state.max_steps_in_episode),
@@ -1018,7 +1020,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "inventory" : 0,
             "init_price": 0, #p_mean,
             "mid_price":0,
-            "total_revenue" : 0,
+            "total_PnL" : 0,
             #"task_size": 0,
            # "executed_quant": 0,
             #"remaining_quant": 0,
@@ -1048,7 +1050,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "init_price": 1e7, #p_std,
             "mid_price": 1e7, #p_std,
             "inventory" : 100,
-            "total_revenue" : 100,
+            "total_PnL" : 100,
             #"task_size": self.max_task_size,
            # "executed_quant": self.max_task_size,
            # "remaining_quant": self.max_task_size,
@@ -1166,7 +1168,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """Observation space of the environment."""
         #space = spaces.Box(-10,10,(809,),dtype=jnp.float32) 
         # space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
-        space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
+        space = spaces.Box(-10, 10, (23,), dtype=jnp.float32) 
         return space
 
     def state_space(self, params: EnvParams) -> spaces.Dict:
@@ -1248,7 +1250,7 @@ if __name__ == "__main__":
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
         #test_action = env.action_space().sample(key_policy) // 10
-        test_action=jnp.array([0,0])
+        test_action=jnp.array([0,0,0,0])
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)
