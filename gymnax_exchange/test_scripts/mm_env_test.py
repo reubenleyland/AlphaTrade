@@ -10,14 +10,15 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from gymnax_exchange.jaxen.mm_env import MarketMakingEnv
 import faulthandler
-import pandas as pd  # Adding pandas for easier CSV writing
+import pandas as pd  
+import chex
 
 faulthandler.enable()
 
 # ============================
 # Configuration
 # ============================
-test_steps = 1500 # Adjusted for your test case; make sure this isn't too high
+test_steps = 500 # Adjusted for your test case; make sure this isn't too high
 
 if __name__ == "__main__":
     try:
@@ -30,11 +31,11 @@ if __name__ == "__main__":
         "ATFOLDER": ATFolder,
         "TASKSIDE": "buy",
         "MAX_TASK_SIZE": 100,
-        "WINDOW_INDEX": 200,
+        "WINDOW_INDEX": 300,
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 23400,  # 
+        "EPISODE_TIME": 240,  # 
     }
 
     # Set up random keys for JAX
@@ -74,6 +75,8 @@ if __name__ == "__main__":
     # Ensure the directory exists, if not, create it
     os.makedirs(os.path.dirname(reward_file), exist_ok=True)
     
+    ask_raw_orders_history = np.zeros((test_steps, 100, 6), dtype=int)
+    bid_raw_orders_history = np.zeros((test_steps, 100,6), dtype=int)
     rewards = np.zeros((test_steps, 1), dtype=int)
     inventory = np.zeros((test_steps, 1), dtype=int)
     total_PnL = np.zeros((test_steps, 1), dtype=int)
@@ -91,8 +94,12 @@ if __name__ == "__main__":
     unrealized_pnl = np.zeros((test_steps, 1), dtype=int) 
     bid_price_PP = np.zeros((test_steps, 1), dtype=int)
     ask_price_PP=np.zeros((test_steps, 1), dtype=int)
+
+
+    output_dir = 'gymnax_exchange/test_scripts/test_outputs/'
    
 
+    
    # book_vol_av_bid= np.zeros((test_steps, 1), dtype=int)
    # book_vol_av_ask = np.zeros((test_steps, 1), dtype=int)
 
@@ -114,6 +121,8 @@ if __name__ == "__main__":
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
         
         # Store data
+        ask_raw_orders_history[i, :, :] = state.ask_raw_orders
+        bid_raw_orders_history[i, :, :] = state.bid_raw_orders
         rewards[i] = reward
         inventory[i] = info["inventory"]
         total_PnL[i] = info["total_PnL"]
@@ -130,10 +139,6 @@ if __name__ == "__main__":
         realized_pnl[i] = info["approx_realized_pnl"]  
         unrealized_pnl[i] = info["approx_unrealized_pnl"] 
         
-    #    book_vol_av_bid[i]=info["book_vol_av_bid"]
-     #   book_vol_av_ask[i]=info["book_vol_av_ask"]
-       # state_best_ask[i] = state.best_asks[-1,0]
-      #  state_best_bid[i] = state.best_bids[-1,0]
         # Increment valid steps
         valid_steps += 1
         
@@ -145,7 +150,7 @@ if __name__ == "__main__":
     # Clip the arrays to remove trailing zeros
     # ============================
 
-    plot_until_step = valid_steps -1
+    plot_until_step = valid_steps 
 
     rewards = rewards[:plot_until_step]
     inventory = inventory[:plot_until_step]
@@ -185,7 +190,6 @@ if __name__ == "__main__":
     print(f"Last valid step {valid_steps}")
     print(f"Last PnL: {total_PnL[-1]}")
     
-
     # ============================
     # Plotting all metrics on one page
     # ============================
@@ -257,3 +261,174 @@ if __name__ == "__main__":
     plt.close()
 
     print(f"Combined plots saved to {combined_plot_file}")
+
+
+
+    import matplotlib.pyplot as plt
+    import matplotlib.animation as animation
+
+    # Ensure output directory exists
+
+    os.makedirs(output_dir, exist_ok=True)
+
+
+
+
+
+    # ============================
+    # Sort and Filter Order Books
+    # ============================
+    def sort_and_filter_order_books(ask_raw_orders_history, bid_raw_orders_history):
+        """
+        Filters and sorts the order books:
+        - Removes rows where the price is invalid (e.g., -1).
+        - Asks: ascending order by price.
+        - Bids: descending order by price.
+        """
+        sorted_ask_history = []
+        sorted_bid_history = []
+        for step in range(len(ask_raw_orders_history)):
+            # Filter invalid asks (price != -1)
+            valid_asks = ask_raw_orders_history[step][ask_raw_orders_history[step][:, 0] != -1]
+            # Sort valid asks in ascending order by price
+            sorted_asks = valid_asks[valid_asks[:, 0].argsort()]
+
+            # Filter invalid bids (price != -1)
+            valid_bids = bid_raw_orders_history[step][bid_raw_orders_history[step][:, 0] != -1]
+            # Sort valid bids in descending order by price
+            sorted_bids = valid_bids[valid_bids[:, 0].argsort()[::-1]]
+
+            sorted_ask_history.append(sorted_asks)
+            sorted_bid_history.append(sorted_bids)
+        return sorted_ask_history, sorted_bid_history
+
+
+    # Sort and filter the order books
+    sorted_ask_raw_orders_history, sorted_bid_raw_orders_history = sort_and_filter_order_books(
+        ask_raw_orders_history, bid_raw_orders_history
+    )
+
+    # ============================
+    # Animation of Cumulative Sum
+    # ============================
+    def animate_order_book_evolution(sorted_ask_history, sorted_bid_history, valid_steps, output_file):
+        """
+        Creates an animation of the cumulative sum graphs over time.
+        """
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        # Initialization function
+        def init():
+            ax.clear()
+            ax.set_xlim(0, 1)  # Temporary values, adjusted dynamically
+            ax.set_ylim(0, 1)  # Temporary values, adjusted dynamically
+            ax.set_xlabel("Price")
+            ax.set_ylabel("Cumulative Quantity")
+            ax.set_title("Limit Order Book Evolution")
+
+        # Animation update function
+        def update(step):
+            ax.clear()
+
+            # Extract data for the current step
+            ask_prices = sorted_ask_history[step][:, 0]
+            ask_quantities = sorted_ask_history[step][:, 1].cumsum()
+            bid_prices = sorted_bid_history[step][:, 0]
+            bid_quantities = sorted_bid_history[step][:, 1].cumsum()
+
+            # Update axis limits dynamically
+            ax.set_xlim(min(bid_prices.min(), ask_prices.min()), max(bid_prices.max(), ask_prices.max()))
+            ax.set_ylim(0, max(ask_quantities.max(), bid_quantities.max()) * 1.1)
+
+            # Plot bids
+            ax.fill_between(
+                bid_prices, 0, bid_quantities, step="pre", color="green", alpha=0.5, label="Bid Depth"
+            )
+
+            # Plot asks
+            ax.fill_between(
+                ask_prices, 0, ask_quantities, step="pre", color="red", alpha=0.5, label="Ask Depth"
+            )
+
+            # Add vertical dashed line
+            ax.axvline(x=(max(bid_prices)+min(ask_prices))/2, color="black", linestyle="--", linewidth=1)
+
+            # Set labels and legend
+            ax.set_xlabel("Price")
+            ax.set_ylabel("Cumulative Quantity")
+            ax.set_title(f"Limit Order Book Evolution at Step {step}")
+            ax.legend()
+
+        # Create animation
+        ani = animation.FuncAnimation(
+            fig, update, frames=valid_steps, init_func=init, interval=200, repeat=False
+        )
+        ani.save(output_file, writer="imagemagick")
+        plt.close()
+        print(f"Animation saved to {output_file}")
+
+
+    # Save animation
+    animate_order_book_evolution(
+        sorted_ask_raw_orders_history,
+        sorted_bid_raw_orders_history,
+        valid_steps,
+        os.path.join(output_dir, "order_book_evolution.gif"),
+    )
+
+
+    def save_last_order_book_frame(sorted_ask_history, sorted_bid_history, valid_steps, output_file):
+        """
+        Save the last frame of the cumulative sum graph as a PNG file.
+        """
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        # Extract data for the last step
+        step = valid_steps - 1
+        ask_prices = sorted_ask_history[step][:, 0]
+        ask_quantities = sorted_ask_history[step][:, 1].cumsum()
+        bid_prices = sorted_bid_history[step][:, 0]
+        bid_quantities = sorted_bid_history[step][:, 1].cumsum()
+
+        # Update axis limits dynamically
+        ax.set_xlim(min(bid_prices.min(), ask_prices.min()), max(bid_prices.max(), ask_prices.max()))
+        ax.set_ylim(0, max(ask_quantities.max(), bid_quantities.max()) * 1.1)
+
+        # Plot bids
+        ax.fill_between(
+            bid_prices, 0, bid_quantities, step="pre", color="green", alpha=0.5, label="Bid Depth"
+        )
+
+        # Plot asks
+        ax.fill_between(
+            ask_prices, 0, ask_quantities, step="pre", color="red", alpha=0.5, label="Ask Depth"
+        )
+
+        # Add vertical dashed line
+        ax.axvline(x=max(bid_prices), color="black", linestyle="--", linewidth=1)
+
+        # Set labels and legend
+        ax.set_xlabel("Price")
+        ax.set_ylabel("Cumulative Quantity")
+        ax.set_title(f"Limit Order Book Evolution at Step {step}")
+        ax.legend()
+
+        # Save the last frame as a PNG file
+        plt.savefig(output_file, format="png")
+        plt.close()
+        print(f"Last frame saved to {output_file}")
+
+
+ 
+
+
+    # 2. Save the last frame as PNG
+    save_last_order_book_frame(
+        sorted_ask_raw_orders_history,
+        sorted_bid_raw_orders_history,
+        valid_steps,
+        os.path.join(output_dir, "last_order_book_frame.png")
+    )
+
+
+

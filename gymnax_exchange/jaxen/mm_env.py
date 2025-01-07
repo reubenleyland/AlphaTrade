@@ -220,6 +220,7 @@ class MarketMakingEnv(BaseLOBEnv):
         action_prices = action_msgs[:, 3]
 
         #Cancel all previous agent orders each step, send fresh
+        #This has been made redundant by the force_market_order_if_done fn
         cnl_msg_bid = job.getCancelMsgs(
             state.bid_raw_orders,
             self.trader_unique_id,
@@ -276,7 +277,7 @@ class MarketMakingEnv(BaseLOBEnv):
         (asks, bids, trades), (new_bestask, new_bestbid), new_id_counter, new_time, mkt_exec_quant, doom_quant = \
             self._force_market_order_if_done(
                  bestasks[-1], bestbids[-1], time, asks, bids, trades, state, params)
-      
+       # jax.debug.print('', price_passive_2, quant_passive_2)
         bestasks = jnp.concatenate([bestasks, jnp.resize(new_bestask, (1, 2))], axis=0, dtype=jnp.int32)
         bestbids = jnp.concatenate([bestbids, jnp.resize(new_bestbid, (1, 2))], axis=0, dtype=jnp.int32)
         
@@ -750,7 +751,7 @@ class MarketMakingEnv(BaseLOBEnv):
             new_time = time + params.time_delay_obs_act
             mkt_msg = jnp.array([
                 # type, side, quant, price
-                1, side, state.inventory, mkt_p,
+                1, side, jnp.abs(state.inventory), mkt_p,
                 self.trader_unique_id,
                 self.trader_unique_id + state.customIDcounter + self.n_actions,  # unique order ID for market order
                 *new_time,  # time of message
@@ -783,6 +784,31 @@ class MarketMakingEnv(BaseLOBEnv):
             create_mkt_order,
             create_dummy_order
         )
+        #jax.debug.print("order_msg :{}",order_msg)
+
+
+        #==============Cancel previous orders by the agent prior to the market order=========###
+        #Cancel all previous agent orders before the market order so that we do not trade with ourselves.
+        cnl_msg_bid = job.getCancelMsgs(
+            bids,
+            self.trader_unique_id,
+            self.n_actions//2, 
+            1  # bids
+        )
+        cnl_msg_ask = job.getCancelMsgs(
+            asks,
+            self.trader_unique_id,
+            self.n_actions//2,
+            -1  # ask side
+        )
+        cnl_msgs = jnp.concatenate([cnl_msg_bid, cnl_msg_ask], axis=0)
+        
+        (asks, bids, trades), (new_bestask, new_bestbid) = job.scan_through_entire_array_save_bidask(
+            cnl_msgs, 
+            (asks, bids, trades),
+            # TODO: this returns bid/ask for last stepLines only, could miss the direct impact of actions
+            self.stepLines
+        )
 
         (asks, bids, trades), (new_bestask, new_bestbid) = job.cond_type_side_save_bidask(
             (asks, bids, trades),
@@ -808,7 +834,7 @@ class MarketMakingEnv(BaseLOBEnv):
         ).sum()        
         # assume execution at really unfavorable price if market order doesn't execute (worst case)
         # create artificial trades for this
-        quant_still_left = state.inventory - mkt_exec_quant
+        quant_still_left = jnp.abs(state.inventory) - mkt_exec_quant
         # jax.debug.print('quant_still_left: {}', quant_still_left)
         # assume doom price with 25% extra cost
         is_sell_task = jnp.where(state.inventory > 0, 1, 0)
@@ -819,14 +845,14 @@ class MarketMakingEnv(BaseLOBEnv):
         )
         # jax.debug.print('doom_price: {}', doom_price)
         # jax.debug.print('best_ask: {}; best_bid {}', bestask, bestbid)
-        # jax.debug.print('ep_is_over: {}; quant_still_left: {}; remainingTime: {}', ep_is_over, quant_still_left, remainingTime)
+        #jax.debug.print('ep_is_over: {}; quant_still_left: {}; remainingTime: {}', ep_is_over, quant_still_left, remainingTime)
         trades = jax.lax.cond(
             ep_is_over & (quant_still_left > 0),
             place_doom_trade,
             lambda trades, b, c, d: trades,
             trades, doom_price, quant_still_left, time
         )
-        # jax.debug.print('trades after doom\n {}', trades[:20])
+        #jax.debug.print('trades after doom\n {}', trades[:20])
         # agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
         # jax.debug.print('agent_trades\n {}', agent_trades[:20])
         # price_quants = self._get_executed_by_price(agent_trades)
