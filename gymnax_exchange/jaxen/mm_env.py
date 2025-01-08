@@ -315,6 +315,9 @@ class MarketMakingEnv(BaseLOBEnv):
             quant_ask_passive_2=quant_ask_passive_2,            
             delta_time = new_time[0] + new_time[1]/1e9 - state.time[0] - state.time[1]/1e9,
         )
+       # jax.debug.print("ask_raw_orders {}",state.ask_raw_orders)
+       # jax.debug.print("bid_raw_orders {}",state.bid_raw_orders)
+
         done = self.is_terminal(state, params)
         average_best_bid=bestbids[:, 0].mean()// self.tick_size * self.tick_size
         average_best_ask=bestasks[:, 0].mean()// self.tick_size * self.tick_size
@@ -766,8 +769,8 @@ class MarketMakingEnv(BaseLOBEnv):
 
         def place_doom_trade(trades, price, quant, time):
             doom_trade = job.create_trade(
-                price, quant, self.trader_unique_id + self.n_actions + 1, -666666, *time, self.trader_unique_id, -666666)
-           # jax.debug.print('doom_trade\n {}', doom_trade)
+                price, quant, -666666,  self.trader_unique_id + state.customIDcounter+ 1 +self.n_actions, *time, -666666, self.trader_unique_id)
+            #jax.debug.print('doom_trade\n {}', doom_trade)
             trades = job.add_trade(trades, doom_trade)
             return trades
          
@@ -809,12 +812,14 @@ class MarketMakingEnv(BaseLOBEnv):
             # TODO: this returns bid/ask for last stepLines only, could miss the direct impact of actions
             self.stepLines
         )
+        #jax.debug.print("ask_raw {}",asks)
+        #jax.debug.print("bid_raw {}",bids)
 
         (asks, bids, trades), (new_bestask, new_bestbid) = job.cond_type_side_save_bidask(
             (asks, bids, trades),
             order_msg
         )
-
+        
         # make sure best prices use the most recent available price and are not negative
         bestask = jax.lax.cond(
             new_bestask[0] <= 0,
@@ -826,6 +831,52 @@ class MarketMakingEnv(BaseLOBEnv):
             lambda: jnp.array([bestbid[0], 0]),
             lambda: new_bestbid,
         )
+       # jax.debug.print('best ask: {}', bestask)
+       # jax.debug.print(' best bid: {}', bestbid)
+
+
+        #==============Cancel previous orders by the agent prior to the market order=========###
+        #Cancel all previous agent orders before the market order so that we do not trade with ourselves.
+        cnl_msg_bid = job.getCancelMsgs(
+            bids,
+            self.trader_unique_id,
+            1, 
+            1  # bids
+        )
+        cnl_msg_ask = job.getCancelMsgs(
+            asks,
+            self.trader_unique_id,
+            1,
+            -1  # ask side
+        )
+        cnl_msgs = jnp.concatenate([cnl_msg_bid, cnl_msg_ask], axis=0)
+
+        (asks, bids, trades), (new_bestask, new_bestbid) = job.scan_through_entire_array_save_bidask(
+            cnl_msgs, 
+            (asks, bids, trades),
+            # TODO: this returns bid/ask for last stepLines only, could miss the direct impact of actions
+            self.stepLines
+        )
+       # jax.debug.print('new best ask: {}', new_bestask)
+       # jax.debug.print('new best bid: {}', new_bestbid)
+        # make sure best prices use the most recent available price and are not negative
+       
+        #jax.debug.print("best ask {},  best bid {}",bestask,bestbid)
+        bestask = jax.lax.cond(
+            new_bestask[1][0] <= 0,
+            lambda: jnp.array([bestask[0], 0]),
+            lambda: new_bestask[1],
+        )
+        bestbid = jax.lax.cond(
+            new_bestbid[1][0] <= 0,
+            lambda: jnp.array([bestbid[0], 0]),
+            lambda: new_bestbid[1],
+        )
+        
+       # jax.debug.print('new  new best ask: {}', bestask)
+       # jax.debug.print('new new best bid: {}', bestbid)
+       
+
         ###TODO: check matching
         mkt_exec_quant = jnp.where(
             trades[:, 3] == order_msg[5],
@@ -835,27 +886,29 @@ class MarketMakingEnv(BaseLOBEnv):
         # assume execution at really unfavorable price if market order doesn't execute (worst case)
         # create artificial trades for this
         quant_still_left = jnp.abs(state.inventory) - mkt_exec_quant
-        # jax.debug.print('quant_still_left: {}', quant_still_left)
+       # jax.debug.print('quant_still_left: {}', quant_still_left)
         # assume doom price with 25% extra cost
         is_sell_task = jnp.where(state.inventory > 0, 1, 0)
+
+        
         doom_price = jax.lax.cond(
             is_sell_task,
             lambda: ((0.75 * bestbid[0]) // self.tick_size * self.tick_size).astype(jnp.int32),
             lambda: ((1.25 * bestask[0]) // self.tick_size * self.tick_size).astype(jnp.int32),
         )
-        # jax.debug.print('doom_price: {}', doom_price)
-        # jax.debug.print('best_ask: {}; best_bid {}', bestask, bestbid)
+        #jax.debug.print('doom_price: {}', doom_price)
+        #jax.debug.print('best_ask: {}; best_bid {}', bestask, bestbid)
         #jax.debug.print('ep_is_over: {}; quant_still_left: {}; remainingTime: {}', ep_is_over, quant_still_left, remainingTime)
         trades = jax.lax.cond(
-            ep_is_over & (quant_still_left > 0),
-            place_doom_trade,
-            lambda trades, b, c, d: trades,
-            trades, doom_price, quant_still_left, time
+            ep_is_over & (quant_still_left > 0),  # Check if episode is over and we still have remaining quantity
+            place_doom_trade,  # Place a doom trade with unfavorable price
+            lambda trades, b, c, d: trades,  # If not, return the existing trades
+            trades, doom_price, jnp.sign(state.inventory) * quant_still_left, time  # Inv +ve means incoming is sell so standing buy.
         )
-        #jax.debug.print('trades after doom\n {}', trades[:20])
-        # agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
-        # jax.debug.print('agent_trades\n {}', agent_trades[:20])
-        # price_quants = self._get_executed_by_price(agent_trades)
+        #jax.debug.print('trades after doom\n {}', trades)
+        agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
+       # jax.debug.print('agent_trades\n {}', agent_trades)
+        price_quants = self._get_executed_by_price(agent_trades)
         # jax.debug.print('price_quants\n {}', price_quants)
         doom_quant = ep_is_over * quant_still_left
 
@@ -881,6 +934,7 @@ class MarketMakingEnv(BaseLOBEnv):
         mask_sell = (((agentTrades[:, 1] < 0) & (self.trader_unique_id == agentTrades[:, 6]))|((agentTrades[:, 1] >= 0)  & (self.trader_unique_id == agentTrades[:, 7])))
         #jax.debug.print("mask_buy: {}", mask_buy)
         agent_buys=jnp.where(mask_buy[:, jnp.newaxis], agentTrades, 0)
+        #jax.debug.print("agent_buys: {}",agent_buys)
         agent_sells=jnp.where(mask_sell[:, jnp.newaxis], agentTrades, 0)
 
 
@@ -932,29 +986,30 @@ class MarketMakingEnv(BaseLOBEnv):
         inventoryPnL_lambda = 0.0002
         unrealizedPnL_lambda = 0.2
         asymmetrically_dampened_lambda = 0.5
-        avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / buyQuant, 0)
-        avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0] * jnp.abs(agent_sells[:, 1])).sum() / sellQuant, 0)
+        avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] / buyQuant * jnp.abs(agent_buys[:, 1])).sum(), 0)  
+        avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0]/ sellQuant * jnp.abs(agent_sells[:, 1])).sum() , 0)
         approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price) / self.tick_size
         approx_unrealized_pnl = jnp.where( 
             inventory_delta > 0,
             inventory_delta * (averageMidprice - avg_buy_price) / self.tick_size,  # Excess buys
             jnp.abs(inventory_delta) * (avg_sell_price - averageMidprice) / self.tick_size # Excess sells
         )
+  
         reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
-
-
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
-        income=(agent_sells[:, 0]* jnp.abs(agent_sells[:, 1])).sum() / self.tick_size
-        outgoing=(agent_buys[:, 0] * jnp.abs(agent_buys[:, 1])).sum() / self.tick_size
-        #jax.debug.print("agent_sells_price {}",agent_sells[:, 0])
+        income=(agent_sells[:, 0]/ self.tick_size* jnp.abs(agent_sells[:, 1])).sum() 
+        outgoing=(agent_buys[:, 0] / self.tick_size* jnp.abs(agent_buys[:, 1])).sum() 
+        #jax.debug.print("income :{}",income)
+        #jax.debug.print("outgoing :{}",outgoing)
+        #jax.debug.print("agent_sells {}",agent_sells)
         #jax.debug.print("agent_sell_quant {}",jnp.abs(agent_sells[:, 1]))
         #jax.debug.print("agent_buys_quant {}",jnp.abs(agent_buys[:, 1]))
 
         #jax.debug.print("Income {}",income)
         #jax.debug.print("outgoing {}",outgoing)
         
-        PnL=income-outgoing
-        #jax.debug.print("pnl {}",pnl)
+        PnL=(income-outgoing)/self.tick_size
+        jax.debug.print("pnl {}",PnL)
         #calculate a fraction of total market activity attributable to us.
         other_exec_quants = jnp.abs(otherTrades[:, 1]).sum()
         market_share = TradedVolume / (TradedVolume + other_exec_quants)
@@ -967,7 +1022,7 @@ class MarketMakingEnv(BaseLOBEnv):
         return reward, {
             "market_share": market_share,
             "undamped_reward":undamped_reward,
-            "PnL": PnL,  # pure revenue is not informative if direction is random (-> flip and normalise)
+            "PnL": PnL, 
             "end_inventory":new_inventory,
             "mid_price":mid_price_end,
             "agentQuant":inventory_delta,
@@ -1227,13 +1282,13 @@ if __name__ == "__main__":
         # ATFolder = "/homes/80/kang/AlphaTrade/testing"
     config = {
         "ATFOLDER": ATFolder,
-        "TASKSIDE": "buy", # "random", # "buy",
-        "MAX_TASK_SIZE": 100, # 500,
-        "WINDOW_INDEX": 1,
-        "ACTION_TYPE": "pure", # "pure",
-        "REWARD_LAMBDA": 1.0,
+        "TASKSIDE": "buy",
+        "MAX_TASK_SIZE": 100,
+        "WINDOW_INDEX": 300,
+        "ACTION_TYPE": "pure",
+        "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 60* 50, # 60 seconds
+        "EPISODE_TIME": 240,  # 
     }
         
     rng = jax.random.PRNGKey(0)
@@ -1276,7 +1331,7 @@ if __name__ == "__main__":
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
         #test_action = env.action_space().sample(key_policy) // 10
-        test_action=jnp.array([0,0,0,0])
+        test_action=jnp.array([100,0,100,1])
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)

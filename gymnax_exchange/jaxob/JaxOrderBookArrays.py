@@ -732,8 +732,8 @@ def add_trade(trades, new_trade):
     
     
 @jax.jit
-def create_trade(price, quant, agrOID, passOID, time, time_ns,agrTID,passTID):
-    return jnp.array([price, quant, agrOID, passOID, time, time_ns ,agrTID ,passTID], dtype=jnp.int32)
+def create_trade(price, quant, passOID,agrOID , time, time_ns,passTID,agrTID):
+    return jnp.array([price, quant, passOID,agrOID , time, time_ns,passTID,agrTID], dtype=jnp.int32)
 
 @jax.jit
 def get_agent_trades(trades, agent_id):

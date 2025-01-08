@@ -30,7 +30,7 @@ if __name__ == "__main__":
     config = {
         "ATFOLDER": ATFolder,
         "TASKSIDE": "buy",
-        "MAX_TASK_SIZE": 100,
+        "MAX_TASK_SIZE": 500,
         "WINDOW_INDEX": 300,
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0.1,
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
-        test_action = jnp.array([0,0,1,1])
+        test_action = jnp.array([500,0,0,0])
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
@@ -307,6 +307,11 @@ if __name__ == "__main__":
     sorted_ask_raw_orders_history, sorted_bid_raw_orders_history = sort_and_filter_order_books(
         ask_raw_orders_history, bid_raw_orders_history
     )
+    
+   # print(f"final ask{ask_raw_orders_history[-1][:, :]}")
+   # print(f"final ask -2 {ask_raw_orders_history[-2][:, :]}")
+   # print(f"final bid{bid_raw_orders_history[-1][:, :]}")
+   # print(f"final bid -2 {bid_raw_orders_history[-2][:, :]}")
 
     # ============================
     # Animation of Cumulative Sum
@@ -369,12 +374,12 @@ if __name__ == "__main__":
 
 
     # Save animation
-    animate_order_book_evolution(
-        sorted_ask_raw_orders_history,
-        sorted_bid_raw_orders_history,
-        valid_steps,
-        os.path.join(output_dir, "order_book_evolution.gif"),
-    )
+   # animate_order_book_evolution(
+    #    sorted_ask_raw_orders_history,
+     #   sorted_bid_raw_orders_history,
+      #  valid_steps,
+      #  os.path.join(output_dir, "order_book_evolution.gif"),
+    #)
 
 
     def save_last_order_book_frame(sorted_ask_history, sorted_bid_history, valid_steps, output_file):
@@ -384,7 +389,7 @@ if __name__ == "__main__":
         fig, ax = plt.subplots(figsize=(10, 5))
 
         # Extract data for the last step
-        step = valid_steps - 1
+        step = valid_steps 
         ask_prices = sorted_ask_history[step][:, 0]
         ask_quantities = sorted_ask_history[step][:, 1].cumsum()
         bid_prices = sorted_bid_history[step][:, 0]
