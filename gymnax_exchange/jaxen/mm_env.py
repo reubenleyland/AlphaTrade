@@ -602,7 +602,7 @@ class MarketMakingEnv(BaseLOBEnv):
         price_quantity_pairs = jnp.stack([action_prices, executions], axis=-1)
 
         # Optionally, you can print or debug the final result
-        jax.debug.print("Price and Quantity Pairs: {}", price_quantity_pairs)
+        #jax.debug.print("Price and Quantity Pairs: {}", price_quantity_pairs)
 
         return price_quantity_pairs
         #best_price = jax.lax.cond(
