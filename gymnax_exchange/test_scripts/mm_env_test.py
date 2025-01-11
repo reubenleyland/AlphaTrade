@@ -83,7 +83,10 @@ if __name__ == "__main__":
     buyQuant = np.zeros((test_steps, 1), dtype=int)
     sellQuant = np.zeros((test_steps, 1), dtype=int)
     bid_price = np.zeros((test_steps, 1), dtype=int)
+    agr_bid_price =np.zeros((test_steps, 1), dtype=int)
     ask_price = np.zeros((test_steps, 1), dtype=int)
+    
+    agr_ask_price =np.zeros((test_steps, 1), dtype=int)
     state_best_ask = np.zeros((test_steps, 1), dtype=int)
     state_best_bid = np.zeros((test_steps, 1), dtype=int)
     averageMidprice = np.zeros((test_steps, 1), dtype=int)
@@ -115,7 +118,7 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
-        test_action = jnp.array([10,10,10,10])
+        test_action = jnp.array([10,10,10,10,10,10])
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
@@ -128,10 +131,12 @@ if __name__ == "__main__":
         total_PnL[i] = info["total_PnL"]
         buyQuant[i] = info["buyQuant"]
         sellQuant[i] = info["sellQuant"]
-        bid_price[i] = info["action_prices_0"]  # Store best ask
-        bid_price_PP[i] = info["action_prices_1"]
-        ask_price[i] = info["action_prices_2"] 
-        ask_price_PP[i] = info["action_prices_3"]# Store best bid
+        agr_bid_price[i] = info["action_prices"][0]  
+        bid_price[i] = info["action_prices"][1]  # Store best ask
+        bid_price_PP[i] = info["action_prices"][2]
+        agr_ask_price[i] = info["action_prices"][3]  
+        ask_price[i] = info["action_prices"][4] 
+        ask_price_PP[i] = info["action_prices"][5]# Store best bid
         averageMidprice[i] = info["averageMidprice"]  # Store mid price
         average_best_bid[i]=info["average_best_bid"]
         average_best_ask[i]=info["average_best_ask"]
@@ -158,6 +163,8 @@ if __name__ == "__main__":
     buyQuant = buyQuant[:plot_until_step]
     sellQuant = sellQuant[:plot_until_step]
     bid_price = bid_price[:plot_until_step]
+    agr_bid_price = agr_bid_price[:plot_until_step]
+    agr_ask_price = agr_ask_price[:plot_until_step]
     ask_price = ask_price[:plot_until_step]
     averageMidprice = averageMidprice[:plot_until_step]
     average_best_bid =average_best_bid[:plot_until_step]
@@ -228,13 +235,15 @@ if __name__ == "__main__":
     axes[1, 2].plot(range(plot_until_step), bid_price, label="Bid Price", color='pink')
     axes[1, 2].plot(range(plot_until_step), ask_price, label="Ask Price", color='cyan')
     axes[1, 2].plot(range(plot_until_step), averageMidprice, label="Average Mid Price", color='magenta')
-    axes[1, 2].plot(range(plot_until_step), average_best_bid, label="Average Best Bid", color='red')
-    axes[1, 2].plot(range(plot_until_step), average_best_ask, label="Average Best Ask", color='blue')
+   # axes[1, 2].plot(range(plot_until_step), average_best_bid, label="Average Best Bid", color='red')
+   # axes[1, 2].plot(range(plot_until_step), average_best_ask, label="Average Best Ask", color='blue')
     axes[1, 2].plot(range(plot_until_step), bid_price_PP, label="Bid Price PP", color='orange')
     axes[1, 2].plot(range(plot_until_step), ask_price_PP, label="Ask Price PP", color='green')
+    axes[1, 2].plot(range(plot_until_step), agr_bid_price, label="Bid Price Agr", color='yellow')
+    axes[1, 2].plot(range(plot_until_step), agr_ask_price, label="Ask Price Agr", color='black')
     axes[1, 2].set_xlabel("Steps")
     axes[1, 2].set_ylabel("Price")
-    axes[1, 2].set_title("Bid, Ask, Mid, and PP Prices Over Steps")
+    axes[1, 2].set_title("Bid, Ask, Mid,Agr, and PP Prices Over Steps")
     axes[1, 2].legend()
 
     axes[2, 0].plot(range(plot_until_step), inventory_pnl, label="Inventory PnL", color='gold')

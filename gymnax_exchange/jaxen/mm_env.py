@@ -165,14 +165,14 @@ class MarketMakingEnv(BaseLOBEnv):
             max_task_size = 500, rewardLambda=0.0001, ep_type="fixed_time"):
         
         #Define Execution-specific attributes.
-        self.n_ticks_in_book = 10 # Depth of PP actions
+        self.n_ticks_in_book = 2 # Depth of PP actions
         self.action_type = action_type # 'delta' or 'pure'
         self.max_task_size = max_task_size #Functions as max trade size for us
         self.inventory=0
         self.market_share=0.
         self.rewardLambda = rewardLambda #
         # TODO: fix!! this can be overwritten in the base class
-        self.n_actions = 4 # 4: (FT, M, NT, PP), 3: (FT, NT, PP), 2 (FT, NT), 1 (FT)
+        self.n_actions = 6 # 4: (FT, M, NT, PP), 3: (FT, NT, PP), 2 (FT, NT), 1 (FT)
 
         #Call base-class init function
         super().__init__(
@@ -331,10 +331,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "other_exec_quants":extras["other_exec_quants"],
             "averageMidprice":extras["averageMidprice"],
             "Step_PnL":extras["PnL"],
-            "action_prices_0":action_prices[0],
-            "action_prices_1":action_prices[1],
-            "action_prices_2":action_prices[2],
-            "action_prices_3":action_prices[3],
+            "action_prices":action_prices,
             "average_best_bid":average_best_bid,
             "average_best_ask":average_best_ask,
             "InventoryPnL":extras["InventoryPnL"],
@@ -646,13 +643,14 @@ class MarketMakingEnv(BaseLOBEnv):
             # mid defaults to one tick more passive if between ticks
             M = (jnp.ceil((best_bid + best_ask) / 2 // self.tick_size)
                  * self.tick_size).astype(jnp.int32)
+            BI = best_bid + self.tick_size*self.n_ticks_in_book #BID inside, slightly more aggresive buying
             NT = best_bid
             PP = best_bid - self.tick_size*self.n_ticks_in_book
             MKT = job.MAX_INT
             if action.shape[0]//2 == 4:
                 return FT, M, NT, PP, MKT
             elif action.shape[0]//2 == 3:
-                return FT, NT, PP, MKT
+                return BI, NT, PP, MKT
             elif action.shape[0]//2 == 2:
                 return NT, PP, MKT
             elif action.shape[0]//2 == 1:
@@ -665,13 +663,14 @@ class MarketMakingEnv(BaseLOBEnv):
             # mid defaults to one tick more passive if between ticks
             M = (jnp.ceil((best_bid + best_ask) / 2 // self.tick_size)
                  * self.tick_size).astype(jnp.int32)
+            AI = best_ask - self.tick_size*self.n_ticks_in_book #Ask inside, slightly more aggresive selling
             NT = best_ask
             PP = best_ask + self.tick_size*self.n_ticks_in_book
             MKT = 0
             if action.shape[0]//2 == 4:
                 return FT, M, NT, PP, MKT
             elif action.shape[0]//2 == 3:
-                return FT, NT, PP, MKT
+                return AI, NT, PP, MKT
             elif action.shape[0]//2 == 2:
                 return NT, PP, MKT
             elif action.shape[0]//2 == 1:
@@ -1211,7 +1210,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """Observation space of the environment."""
         #space = spaces.Box(-10,10,(809,),dtype=jnp.float32) 
         # space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
-        space = spaces.Box(-10, 10, (23,), dtype=jnp.float32) 
+        space = spaces.Box(-10, 10, (25,), dtype=jnp.float32) 
         return space
 
     def state_space(self, params: EnvParams) -> spaces.Dict:
@@ -1293,7 +1292,7 @@ if __name__ == "__main__":
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
         #test_action = env.action_space().sample(key_policy) // 10
-        test_action=jnp.array([100,0,100,1])
+        test_action=jnp.array([100,0,100,1,0,0])
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)
