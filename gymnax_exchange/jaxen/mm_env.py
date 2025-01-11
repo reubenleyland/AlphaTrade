@@ -140,7 +140,7 @@ import jax.tree_util as jtu
 class EnvState(BaseEnvState):
     prev_action: chex.Array
     #TODO: Look into how we re-calc prev executed for market maker.
-    #prev_executed: chex.Array
+    prev_executed: chex.Array
     # Potentially could be moved to base,
     # so long as saving of best ask/bids is base behaviour. 
     best_asks: chex.Array
@@ -269,6 +269,9 @@ class MarketMakingEnv(BaseLOBEnv):
                 state.best_bids[-1, 0]
             )
         )
+        agent_trades = job.get_agent_trades(trades, self.trader_unique_id)
+        executions = self._get_executed_by_action(agent_trades, action, state,action_prices)
+        #jax.debug.print("executions:{}",executions)
         #=======================================#
         #===force inventory sale at episode end=#
         #=======================================#
@@ -287,7 +290,7 @@ class MarketMakingEnv(BaseLOBEnv):
         state = EnvState(
             prev_action = jnp.vstack([action_prices, action]).T,  # includes prices and quantitites 
             #TODO: implement prev_executed and get this on the state. 
-           # prev_executed = executions, # include prices and quantities 
+            prev_executed = executions, # include prices and quantities 
             ask_raw_orders = asks,
             bid_raw_orders = bids,
             trades = trades,
@@ -389,7 +392,7 @@ class MarketMakingEnv(BaseLOBEnv):
         return EnvState(
             *base_vals,
             prev_action=jnp.zeros((self.n_actions, 2), jnp.int32),
-           # prev_executed=jnp.zeros((self.n_actions, ), jnp.int32),
+            prev_executed=jnp.zeros((self.n_actions,2 ), jnp.int32),
             best_asks=jnp.resize(best_ask,(self.stepLines,2)),
             best_bids=jnp.resize(best_bid,(self.stepLines,2)),
             init_price=M,
@@ -562,52 +565,87 @@ class MarketMakingEnv(BaseLOBEnv):
         price_quants = price_quants[jnp.argsort(jnp.argsort(actions <= 0))]
         return price_quants
     
-    def _get_executed_by_action(self, agent_trades: jax.Array, actions: jax.Array, state: EnvState) -> jax.Array:
-        """ Get executed quantity by level from trades. Results are sorted from aggressive to passive
-            using previous actions. (0 actions are skipped)
-            Aggressive quantities at FT and more passive are summed as the first quantity.
+    def _get_executed_by_action(self, agent_trades: jax.Array, actions: jax.Array, state: EnvState,action_prices:jax.Array) -> jax.Array:
+        """ Get executed quantity by level from trades. 
         """
-        best_price = jax.lax.cond(
+        #TODO: This will have an issue if we buy and sell at the same price. This should be avoided anyway.
+        #TODO: Put in a safe guard for that.
+        def find_index_safe(x, action_prices):
+            # Create a mask for matching prices
+            match_mask = action_prices == x
+            has_match = jnp.any(match_mask)
+            first_match = jnp.argmax(match_mask)  # Returns the first index of True, or 0 if no match
+            return jax.lax.cond(
+                has_match,
+                lambda _: first_match,  # Return the index if a match exists
+                lambda _: -1,           # Return -1 otherwise
+                operand=None
+            )
+
+        # Map prices to indices
+        price_to_index = jax.vmap(lambda x: find_index_safe(x, action_prices))(agent_trades[:, 0])
+        #jax.debug.print("action_prices:{}",action_prices)
+        #jax.debug.print("agent_trades :{}",agent_trades)
+
+        # Create masks for valid indices
+        valid_indices = price_to_index >= 0
+        num_prices = self.n_actions
+
+        # Mask trades and indices instead of boolean indexing
+        valid_trades = jnp.where(valid_indices, agent_trades[:, 1], 0)
+        #jax.debug.print("valid_trades:{}",valid_trades)
+        valid_price_to_index = jnp.where(valid_indices, price_to_index, 0)
+
+        # Sum trades by price level
+        executions = jax.ops.segment_sum(valid_trades, valid_price_to_index, num_segments=num_prices)
+       # Create a 2D array with price levels and corresponding trade quantities
+        price_quantity_pairs = jnp.stack([action_prices, executions], axis=-1)
+
+        # Optionally, you can print or debug the final result
+        jax.debug.print("Price and Quantity Pairs: {}", price_quantity_pairs)
+
+        return price_quantity_pairs
+        #best_price = jax.lax.cond(
            # state.is_sell_task,
-            lambda: state.best_bids[-1, 0],
-            lambda: state.best_asks[-1, 0]
-        )
-        aggr_trades_mask = jax.lax.cond(
+       #     lambda: state.best_bids[-1, 0],
+       #     lambda: state.best_asks[-1, 0]
+       # )
+       # aggr_trades_mask = jax.lax.cond(
            # state.is_sell_task,
-            lambda: agent_trades[:, 0] <= best_price,
-            lambda: agent_trades[:, 0] >= best_price
-        )
-        exec_quant_aggr = jnp.where(
-            aggr_trades_mask,
-            jnp.abs(agent_trades[:, 1]),
-            0
-        ).sum()
+       #     lambda: agent_trades[:, 0] <= best_price,
+        #    lambda: agent_trades[:, 0] >= best_price
+        #)
+        #exec_quant_aggr = jnp.where(
+        #    aggr_trades_mask,
+        #    jnp.abs(agent_trades[:, 1]),
+        #    0
+        #).sum()
         # jax.debug.print('best_price\n {}', best_price)
         # jax.debug.print('exec_quant_aggr\n {}', exec_quant_aggr)
         
-        price_quants_pass = self._get_executed_by_price(
+       # price_quants_pass = self._get_executed_by_price(
             # agent_trades[~aggr_trades_mask]
-            jnp.where(
-                jnp.expand_dims(aggr_trades_mask, axis=1),
-                0,
-                agent_trades
-            )
-        )
+        #    jnp.where(
+         #       jnp.expand_dims(aggr_trades_mask, axis=1),
+          #      0,
+           #     agent_trades
+           # )
+        #)
         # jax.debug.print('price_quants_pass\n {}', price_quants_pass)
         # sort from aggr to passive
-        price_quants = jax.lax.cond(
-          #  state.is_sell_task,
-            lambda: price_quants_pass,
-            lambda: price_quants_pass[::-1],  # for buy task, most aggressive is highest price
-        )
+        #price_quants = jax.lax.cond(
+         # #  state.is_sell_task,
+          #  lambda: price_quants_pass,
+           # lambda: price_quants_pass[::-1],  # for buy task, most aggressive is highest price
+       # )
         # put executions in non-zero action places (keeping the order)
-        price_quants = price_quants[jnp.argsort(jnp.argsort(actions[1:] <= 0))]
-        price_quants = jnp.concatenate(
-            (jnp.array([[best_price, exec_quant_aggr]]), price_quants),
-        )
+        #price_quants = price_quants[jnp.argsort(jnp.argsort(actions[1:] <= 0))]
+        #price_quants = jnp.concatenate(
+         #   (jnp.array([[best_price, exec_quant_aggr]]), price_quants),
+        #)
         # jax.debug.print("actions {} \n price_quants {} \n", actions, price_quants)
         # return quants only (aggressive prices could be multiple)
-        return price_quants[:, 1]
+       # return price_quants
     
     def _getActionMsgs(self, action: jax.Array, state: EnvState, params: EnvParams):
         '''Shape the action quantities in to messages sent the order book at the 
@@ -1035,7 +1073,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "max_steps": state.max_steps_in_episode,
             "remaining_ratio": jnp.where(state.max_steps_in_episode==0, 0., 1. - state.step_counter / state.max_steps_in_episode),
             "prev_action": state.prev_action[:, 1],  # use quants only
-           # "prev_executed": state.prev_executed,  # use quants only
+            "prev_executed": state.prev_executed,  # use quants only
           #  "prev_executed_ratio": jnp.where(state.prev_action[:, 1]==0., 0., state.prev_executed / state.prev_action[:, 1]),
             
         }
@@ -1070,8 +1108,8 @@ class MarketMakingEnv(BaseLOBEnv):
             "max_steps": 0,
             "remaining_ratio": 0,
             "prev_action": 0,
-           # "prev_executed": 0,
-          #  "prev_executed_ratio": 0,
+            "prev_executed": 0,
+          # "prev_executed_ratio": 0,
         
         }
         stds = {
@@ -1100,7 +1138,7 @@ class MarketMakingEnv(BaseLOBEnv):
             "max_steps": 30,
             "remaining_ratio": 1,
             "prev_action": 10,
-          #  "prev_executed": 10,
+            "prev_executed": 10,
           #  "prev_executed_ratio": 1,
         }
         if normalize:
@@ -1210,7 +1248,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """Observation space of the environment."""
         #space = spaces.Box(-10,10,(809,),dtype=jnp.float32) 
         # space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
-        space = spaces.Box(-10, 10, (25,), dtype=jnp.float32) 
+        space = spaces.Box(-10, 10, (26,), dtype=jnp.float32) 
         return space
 
     def state_space(self, params: EnvParams) -> spaces.Dict:
@@ -1284,7 +1322,7 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,2000):
+    for i in range(1,200):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
@@ -1292,7 +1330,7 @@ if __name__ == "__main__":
         key_step, _ = jax.random.split(key_step, 2)
         # test_action=env.action_space().sample(key_policy)
         #test_action = env.action_space().sample(key_policy) // 10
-        test_action=jnp.array([100,0,100,1,0,0])
+        test_action=jnp.array([100,100,100,100,10,10])
         #env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)
