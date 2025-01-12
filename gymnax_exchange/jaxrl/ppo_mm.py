@@ -653,10 +653,10 @@ def make_train(config):
                     #total_bid_quant_before_step=info["total_bid_quant_before_step"]
                     buyQuant=info["buyQuant"]
                     sellQuant=info["sellQuant"]
-                    action_prices_0=info["action_prices_0"]
-                    action_prices_1=info["action_prices_1"]
-                    action_prices_2=info["action_prices_2"]
-                    action_prices_3=info["action_prices_3"]
+                 #   action_prices_0=info["action_prices_0"]
+                  #  action_prices_1=info["action_prices_1"]
+                   # action_prices_2=info["action_prices_2"]
+                    #action_prices_3=info["action_prices_3"]
                     #market_share=info["market_share"]
                     other_exec_quants=info["other_exec_quants"]
 
@@ -721,10 +721,10 @@ def make_train(config):
                                 "episodic_return": jnp.mean(return_values) if return_values.size > 0 else 0,  # Handle empty arrays
                                 "PnL": jnp.mean(PnL) if PnL.size > 0 else 0,  # Handle empty arrays
                                 "inventory": jnp.mean(inventories) if inventories.size > 0 else 0, 
-                                "action_prices_0": jnp.mean(action_prices_0) if action_prices_0.size > 0 else 0,
-                                "action_prices_1": jnp.mean(action_prices_1) if action_prices_0.size > 0 else 0,
-                                "action_prices_2": jnp.mean(action_prices_2) if action_prices_0.size > 0 else 0,
-                                "action_prices_3": jnp.mean(action_prices_3) if action_prices_0.size > 0 else 0,
+                               # "action_prices_0": jnp.mean(action_prices_0) if action_prices_0.size > 0 else 0,
+                                #"action_prices_1": jnp.mean(action_prices_1) if action_prices_0.size > 0 else 0,
+                                #"action_prices_2": jnp.mean(action_prices_2) if action_prices_0.size > 0 else 0,
+                                #"action_prices_3": jnp.mean(action_prices_3) if action_prices_0.size > 0 else 0,
                                # "total_ask_quant_before_step":jnp.mean(total_ask_quant_before_step) if total_ask_quant_before_step.size > 0 else 0,
                                # "total_bid_quant_before_step":jnp.mean(total_bid_quant_before_step) if total_bid_quant_before_step.size > 0 else 0,
                                 "buyQuant":jnp.mean(buyQuant) if buyQuant.size > 0 else 0,
