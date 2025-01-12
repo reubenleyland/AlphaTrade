@@ -1248,7 +1248,7 @@ class MarketMakingEnv(BaseLOBEnv):
         """Observation space of the environment."""
         #space = spaces.Box(-10,10,(809,),dtype=jnp.float32) 
         # space = spaces.Box(-10, 10, (21,), dtype=jnp.float32) 
-        space = spaces.Box(-10, 10, (26,), dtype=jnp.float32) 
+        space = spaces.Box(-10, 10, (37,), dtype=jnp.float32) 
         return space
 
     def state_space(self, params: EnvParams) -> spaces.Dict:
