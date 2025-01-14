@@ -661,6 +661,7 @@ def make_train(config):
                     #total_bid_quant_before_step=info["total_bid_quant_before_step"]
                     buyQuant=info["buyQuant"]
                     sellQuant=info["sellQuant"]
+                    reward=info["reward"]
                  #   action_prices_0=info["action_prices_0"]
                   #  action_prices_1=info["action_prices_1"]
                    # action_prices_2=info["action_prices_2"]
@@ -726,6 +727,7 @@ def make_train(config):
                             data={
                                 "update_step": update_step,
                                 "global_step": jnp.max(timesteps) if timesteps.size > 0 else 0, # timesteps[t],
+                                "reward":jnp.mean(reward) if reward.size > 0 else 0,
                                 "episodic_return": jnp.mean(return_values) if return_values.size > 0 else 0,  # Handle empty arrays
                                 "PnL": jnp.mean(PnL) if PnL.size > 0 else 0,  # Handle empty arrays
                                 "inventory": jnp.mean(inventories) if inventories.size > 0 else 0, 
@@ -833,7 +835,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure", # "delta"
         "MAX_TASK_SIZE": 10,
         #"TASK_SIZE": 100, # 500,
-        "EPISODE_TIME": 60*3, # time in seconds
+        "EPISODE_TIME": 60*30, # time in seconds
         "DATA_TYPE": "fixed_time", # "fixed_time", "fixed_steps"
         "CONT_ACTIONS": False,  # True
         "JOINT_ACTOR_CRITIC_NET": True,  # True, False

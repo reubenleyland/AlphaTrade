@@ -321,6 +321,7 @@ class MarketMakingEnv(BaseLOBEnv):
         average_best_ask=bestasks[:, 0].mean()// self.tick_size * self.tick_size
 
         info = {
+            "reward":reward,
             "window_index": state.window_index,
             "total_PnL": state.total_PnL,                           
             "current_step": state.step_counter,
@@ -364,7 +365,7 @@ class MarketMakingEnv(BaseLOBEnv):
         if self.ep_type == 'fixed_time':
             # TODO: make the 5 sec a function of the step size
             return (
-                (params.episode_time - (state.time - state.init_time)[0] <= 5)  # time over (last 5 seconds)
+                (params.episode_time - (state.time - state.init_time)[0] <= 15)  # time over (last 5 seconds)
             )
         elif self.ep_type == 'fixed_steps':
             return (
@@ -1332,7 +1333,7 @@ if __name__ == "__main__":
     
 
     # print(env_params.message_data.shape, env_params.book_data.shape)
-    for i in range(1,200):
+    for i in range(1,20000):
          # ==================== ACTION ====================
         # ---------- acion from random sampling ----------
         print("-"*20)
