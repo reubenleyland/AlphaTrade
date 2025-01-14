@@ -995,9 +995,9 @@ class MarketMakingEnv(BaseLOBEnv):
         #reward=buyPnL+sellPnL + InventoryPnL - (1-self.rewardLambda)*jnp.maximum(0,InventoryPnL) # Asymmetrically dampened PnL
 
         #More complex reward function (should be added as part of the env if we actually use them):
-        inventoryPnL_lambda = 0.0002
-        unrealizedPnL_lambda = 0.2
-        asymmetrically_dampened_lambda = 0.5
+        inventoryPnL_lambda = 0.002
+        unrealizedPnL_lambda = 0
+        asymmetrically_dampened_lambda = 0.05
         avg_buy_price = jnp.where(buyQuant > 0, (agent_buys[:, 0] / buyQuant * jnp.abs(agent_buys[:, 1])).sum(), 0)  
         avg_sell_price = jnp.where(sellQuant > 0, (agent_sells[:, 0]/ sellQuant * jnp.abs(agent_sells[:, 1])).sum() , 0)
         approx_realized_pnl = jnp.minimum(buyQuant, sellQuant) * (avg_sell_price - avg_buy_price) / self.tick_size
@@ -1008,6 +1008,16 @@ class MarketMakingEnv(BaseLOBEnv):
         )
   
         reward = approx_realized_pnl + unrealizedPnL_lambda * approx_unrealized_pnl +  inventoryPnL_lambda * jnp.minimum(InventoryPnL,InventoryPnL*asymmetrically_dampened_lambda) #Last term adds negative inventory PnL without dampening
+        
+        # Define a penalty if he exceeds a certain inventory
+        penalty_threshold = 100.0
+        penalty_amount = 100.0 
+        penalty = jnp.where(jnp.abs(state.inventory) > penalty_threshold, penalty_amount, 0.0)
+        reward = reward - penalty
+        
+        
+        
+        
         #Real Revenue calcs: (actual cash flow+actual value of portfolio)
         income=(agent_sells[:, 0]/ self.tick_size* jnp.abs(agent_sells[:, 1])).sum() 
         outgoing=(agent_buys[:, 0] / self.tick_size* jnp.abs(agent_buys[:, 1])).sum() 
