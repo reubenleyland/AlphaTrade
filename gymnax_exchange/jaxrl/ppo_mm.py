@@ -98,6 +98,14 @@ def make_train(config):
     )
     env = LogWrapper(env)
     
+
+
+    # Print the total number of windows and their start/end indices
+    #print("Total number of available windows:", env.n_windows)
+    #print("Start indices of windows:", env.start_indeces)
+    #print("End indices of windows:", env.end_indeces)
+
+
     if config["NORMALIZE_ENV"]:
         env = NormalizeVecObservation(env)
         # NOTE: don't normalize reward for now
