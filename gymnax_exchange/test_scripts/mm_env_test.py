@@ -18,7 +18,7 @@ faulthandler.enable()
 # ============================
 # Configuration
 # ============================
-test_steps = 500 # Adjusted for your test case; make sure this isn't too high
+test_steps = 150 # Adjusted for your test case; make sure this isn't too high
 
 if __name__ == "__main__":
     try:
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 240,  # 
+        "EPISODE_TIME": 60*30,  # 
     }
 
     # Set up random keys for JAX
@@ -58,6 +58,7 @@ if __name__ == "__main__":
         reward_lambda=0.0001,
         episode_time=config["EPISODE_TIME"],  # in seconds
     )
+    
 
     # Initialize the environment state
     start = time.time()
@@ -118,7 +119,7 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
-        test_action = jnp.array([10,10,10,10,10,10])
+        test_action = jnp.array([0,0,0,100,100,100])
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
@@ -374,12 +375,12 @@ if __name__ == "__main__":
             ax.legend()
 
         # Create animation
-        ani = animation.FuncAnimation(
-            fig, update, frames=valid_steps, init_func=init, interval=200, repeat=False
-        )
-        ani.save(output_file, writer="imagemagick")
-        plt.close()
-        print(f"Animation saved to {output_file}")
+     #   ani = animation.FuncAnimation(
+    #        fig, update, frames=valid_steps, init_func=init, interval=200, repeat=False
+    #    )
+    #    ani.save(output_file, writer="imagemagick")
+     #   plt.close()
+     #   print(f"Animation saved to {output_file}")
 
 
     # Save animation
@@ -437,12 +438,12 @@ if __name__ == "__main__":
 
 
     # 2. Save the last frame as PNG
-    save_last_order_book_frame(
-        sorted_ask_raw_orders_history,
-        sorted_bid_raw_orders_history,
-        valid_steps,
-        os.path.join(output_dir, "last_order_book_frame.png")
-    )
+  #  save_last_order_book_frame(
+   #     sorted_ask_raw_orders_history,
+   #     sorted_bid_raw_orders_history,
+   #     valid_steps,
+   #     os.path.join(output_dir, "last_order_book_frame.png")
+   # )
 
 
 

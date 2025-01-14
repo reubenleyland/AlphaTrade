@@ -93,7 +93,7 @@ if __name__ == "__main__":
         "ATFOLDER": ATFolder,
         "TASKSIDE": "buy",
         "MAX_TASK_SIZE": 500,
-        "WINDOW_INDEX": 300,
+        "WINDOW_INDEX": 250,
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
