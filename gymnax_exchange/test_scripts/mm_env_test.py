@@ -18,7 +18,7 @@ faulthandler.enable()
 # ============================
 # Configuration
 # ============================
-test_steps = 150 # Adjusted for your test case; make sure this isn't too high
+test_steps = 15000 # Adjusted for your test case; make sure this isn't too high
 
 if __name__ == "__main__":
     try:
@@ -30,12 +30,12 @@ if __name__ == "__main__":
     config = {
         "ATFOLDER": ATFolder,
         "TASKSIDE": "buy",
-        "MAX_TASK_SIZE": 500,
-        "WINDOW_INDEX": 300,
+        "MAX_TASK_SIZE": 2,
+        "WINDOW_INDEX": 0,
         "ACTION_TYPE": "pure",
         "REWARD_LAMBDA": 0.1,
         "EP_TYPE": "fixed_time",
-        "EPISODE_TIME": 60*30,  # 
+        "EPISODE_TIME": 60*60,  # 
     }
 
     # Set up random keys for JAX
@@ -76,8 +76,8 @@ if __name__ == "__main__":
     # Ensure the directory exists, if not, create it
     os.makedirs(os.path.dirname(reward_file), exist_ok=True)
     
-    ask_raw_orders_history = np.zeros((test_steps, 100, 6), dtype=int)
-    bid_raw_orders_history = np.zeros((test_steps, 100,6), dtype=int)
+    #ask_raw_orders_history = np.zeros((test_steps, 100, 6), dtype=int)
+    #bid_raw_orders_history = np.zeros((test_steps, 100,6), dtype=int)
     rewards = np.zeros((test_steps, 1), dtype=int)
     inventory = np.zeros((test_steps, 1), dtype=int)
     total_PnL = np.zeros((test_steps, 1), dtype=int)
@@ -119,25 +119,26 @@ if __name__ == "__main__":
         # ==================== ACTION ====================
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
-        test_action = jnp.array([0,0,0,100,100,100])
+        #test_action= test_action = env.action_space().sample(key_policy) 
+        test_action = jnp.array([0,0])
         
         start = time.time()
         obs, state, reward, done, info = env.step(key_step, state, test_action, env_params)
         
         # Store data
-        ask_raw_orders_history[i, :, :] = state.ask_raw_orders
-        bid_raw_orders_history[i, :, :] = state.bid_raw_orders
+        #ask_raw_orders_history[i, :, :] = state.ask_raw_orders
+        #bid_raw_orders_history[i, :, :] = state.bid_raw_orders
         rewards[i] = reward
         inventory[i] = info["inventory"]
         total_PnL[i] = info["total_PnL"]
         buyQuant[i] = info["buyQuant"]
         sellQuant[i] = info["sellQuant"]
-        agr_bid_price[i] = info["action_prices"][0]  
-        bid_price[i] = info["action_prices"][1]  # Store best ask
-        bid_price_PP[i] = info["action_prices"][2]
-        agr_ask_price[i] = info["action_prices"][3]  
-        ask_price[i] = info["action_prices"][4] 
-        ask_price_PP[i] = info["action_prices"][5]# Store best bid
+        #agr_bid_price[i] = info["action_prices"][0]  
+        bid_price[i] = info["action_prices"][0]  # Store best ask
+        #bid_price_PP[i] = info["action_prices"][2]
+        #agr_ask_price[i] = info["action_prices"][3]  
+        ask_price[i] = info["action_prices"][1] 
+        #ask_price_PP[i] = info["action_prices"][5]# Store best bid
         averageMidprice[i] = info["averageMidprice"]  # Store mid price
         average_best_bid[i]=info["average_best_bid"]
         average_best_ask[i]=info["average_best_ask"]
@@ -164,8 +165,8 @@ if __name__ == "__main__":
     buyQuant = buyQuant[:plot_until_step]
     sellQuant = sellQuant[:plot_until_step]
     bid_price = bid_price[:plot_until_step]
-    agr_bid_price = agr_bid_price[:plot_until_step]
-    agr_ask_price = agr_ask_price[:plot_until_step]
+    #agr_bid_price = agr_bid_price[:plot_until_step]
+    #agr_ask_price = agr_ask_price[:plot_until_step]
     ask_price = ask_price[:plot_until_step]
     averageMidprice = averageMidprice[:plot_until_step]
     average_best_bid =average_best_bid[:plot_until_step]
@@ -173,8 +174,8 @@ if __name__ == "__main__":
     inventory_pnl = inventory_pnl[:plot_until_step]
     realized_pnl = realized_pnl[:plot_until_step]
     unrealized_pnl = unrealized_pnl[:plot_until_step]
-    bid_price_PP =  bid_price_PP[:plot_until_step]
-    ask_price_PP =  ask_price_PP[:plot_until_step]
+    #bid_price_PP =  bid_price_PP[:plot_until_step]
+    #ask_price_PP =  ask_price_PP[:plot_until_step]
     #state_best_bid = state_best_bid[:valid_steps-1]
        # state_best_ask = state_best_ask[:valid_steps-1]
    # book_vol_av_bid= book_vol_av_bid[:valid_steps-1]
@@ -238,10 +239,10 @@ if __name__ == "__main__":
     axes[1, 2].plot(range(plot_until_step), averageMidprice, label="Average Mid Price", color='magenta')
    # axes[1, 2].plot(range(plot_until_step), average_best_bid, label="Average Best Bid", color='red')
    # axes[1, 2].plot(range(plot_until_step), average_best_ask, label="Average Best Ask", color='blue')
-    axes[1, 2].plot(range(plot_until_step), bid_price_PP, label="Bid Price PP", color='orange')
-    axes[1, 2].plot(range(plot_until_step), ask_price_PP, label="Ask Price PP", color='green')
-    axes[1, 2].plot(range(plot_until_step), agr_bid_price, label="Bid Price Agr", color='yellow')
-    axes[1, 2].plot(range(plot_until_step), agr_ask_price, label="Ask Price Agr", color='black')
+    #axes[1, 2].plot(range(plot_until_step), bid_price_PP, label="Bid Price PP", color='orange')
+    #axes[1, 2].plot(range(plot_until_step), ask_price_PP, label="Ask Price PP", color='green')
+    #axes[1, 2].plot(range(plot_until_step), agr_bid_price, label="Bid Price Agr", color='yellow')
+    #axes[1, 2].plot(range(plot_until_step), agr_ask_price, label="Ask Price Agr", color='black')
     axes[1, 2].set_xlabel("Steps")
     axes[1, 2].set_ylabel("Price")
     axes[1, 2].set_title("Bid, Ask, Mid,Agr, and PP Prices Over Steps")
@@ -314,9 +315,9 @@ if __name__ == "__main__":
 
 
     # Sort and filter the order books
-    sorted_ask_raw_orders_history, sorted_bid_raw_orders_history = sort_and_filter_order_books(
-        ask_raw_orders_history, bid_raw_orders_history
-    )
+   # sorted_ask_raw_orders_history, sorted_bid_raw_orders_history = sort_and_filter_order_books(
+    #    ask_raw_orders_history, bid_raw_orders_history
+    #)
     
    # print(f"final ask{ask_raw_orders_history[-1][:, :]}")
    # print(f"final ask -2 {ask_raw_orders_history[-2][:, :]}")

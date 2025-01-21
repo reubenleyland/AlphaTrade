@@ -227,7 +227,7 @@ def make_train(config):
 
                 log_prob = pi.log_prob(action // config["REDUCE_ACTION_SPACE_BY"])
 
-                # print('action {}, log_prob {}', action.shape, log_prob.shape)
+                #print('action {}, log_prob {}', action.shape, log_prob.shape)
                 #jax.debug.print('action {}, log_prob {}', action, log_prob)
 
                 value, action, log_prob = (
@@ -801,46 +801,47 @@ if __name__ == "__main__":
     ppo_config = {
         "LR": 1e-4, # 1e-4, 5e-4, #5e-5, #1e-4,#2.5e-5,
         "LR_COS_CYCLES": 8,  # only relevant if ANNEAL_LR == "cosine"
-        "ENT_COEF": 0.1, # 0., 0.001, 0, 0.1, 0.01, 0.001
-        "NUM_ENVS": 128, #512, 1024, #128, #64, 1000,
-        "TOTAL_TIMESTEPS": 8e6,  # 1e8, 5e7, # 50MIL for single data window convergence #,1e8,  # 6.9h
-        "NUM_MINIBATCHES": 2, #8, 4, 2,
-        "UPDATE_EPOCHS": 5, #10, 30, 5,
+        "ENT_COEF": 0.2, # 0., 0.001, 0, 0.1, 0.01, 0.001
+        "NUM_ENVS": 256, #512, 1024, #128, #64, 1000,
+        "TOTAL_TIMESTEPS": 2e6,  # 1e8, 5e7, # 50MIL for single data window convergence #,1e8,  # 6.9h
+        "NUM_MINIBATCHES": 4, #8, 4, 2,
+        "UPDATE_EPOCHS": 10, #10, 30, 5,
         "NUM_STEPS": 10, #20, 512, 500,
         "CLIP_EPS": 0.2,  # TODO: should we change this to a different value? 
         
-        "GAMMA": 0.999,
+        "GAMMA": 0.95,
         "GAE_LAMBDA": 0.99, #0.95,
         "VF_COEF": 1.0, #1., 0.01, 0.001, 1.0, 0.5,
         "MAX_GRAD_NORM": 5, # 0.5, 2.0,
         "ANNEAL_LR": 'cosine', # 'linear', 'cosine', False
-        "NORMALIZE_ENV": True,  # only norms observations (not reward)
+        "NORMALIZE_ENV": False,  # only norms observations (not reward)
         
         "RNN_TYPE": "S5",  # "GRU", "S5"
         "HIDDEN_SIZE": 64,  # 128
         "ACTIVATION_FN": "relu", # "tanh", "relu", "leaky_relu", "sigmoid", "swish"
-        "ACTION_NOISE_COLOR": 5.,  # 2  # only relevant if CONT_ACTIONS == True
+        "ACTION_NOISE_COLOR": 2.,  # 2  # only relevant if CONT_ACTIONS == True
 
-        "RESET_ADAM_COUNT": False,  # resets Adam's t (count) every update
+        "RESET_ADAM_COUNT": True,  # resets Adam's t (count) every update
         "ADAM_B1": 0.99,  # 0.9
         "ADAM_B2": 0.99,
         "ADAM_EPS": 1e-5,  # 1e-4, 1e-6
         
         "ENV_NAME": "alphatradeMM-v0",
-        "WINDOW_INDEX": 2, # 2 fix random episode #-1,
+        "WINDOW_INDEX": 200, # 2 fix random episode #-1,
         "DEBUG": True,
         
         "TASKSIDE": "random", # "random", "buy", "sell"
-        "REWARD_LAMBDA": .0001, #0.001,
+        "REWARD_LAMBDA": 0.1, #0.001,
         "ACTION_TYPE": "pure", # "delta"
-        "MAX_TASK_SIZE": 10,
-        #"TASK_SIZE": 100, # 500,
-        "EPISODE_TIME": 60*30, # time in seconds
+        "MAX_TASK_SIZE": 12,
+        "TASK_SIZE": 100, # 500,
+        "EPISODE_TIME": 60 * 60, # time in seconds
         "DATA_TYPE": "fixed_time", # "fixed_time", "fixed_steps"
         "CONT_ACTIONS": False,  # True
         "JOINT_ACTOR_CRITIC_NET": True,  # True, False
         "ACTOR_STD": "state_dependent",  # 'state_dependent', 'param', 'fixed'
         "REDUCE_ACTION_SPACE_BY": 10,
+        
       
         "ATFOLDER": "/home/duser/AlphaTrade/training_oneDay", #"/homes/80/kang/AlphaTrade/training_oneDay/",
         # "ATFOLDER": "./training_oneMonth/", #"/homes/80/kang/AlphaTrade/training_oneDay/",
