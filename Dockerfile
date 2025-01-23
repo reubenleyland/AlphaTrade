@@ -23,9 +23,7 @@ RUN apt-get update && apt-get install -y \
 # Upgrade pip and setuptools
 RUN pip install --upgrade pip setuptools
 
-# Install JAX and dependencies with specific versions
-RUN pip install "jax[cuda]==0.4.16" jaxlib==0.4.16 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html && \
-    pip install flax==0.6.11 optax==0.1.7 jaxopt==0.8.1 brax==0.9.2 chex==0.1.8
+
 
 # Install additional Python packages
 RUN pip install \
@@ -43,6 +41,16 @@ RUN pip install \
     tensorflow-probability==0.22.0 \
     scipy==1.11.3
 
+# Install JAX and dependencies with specific versions
+RUN pip install "jax[cuda]==0.4.16" jaxlib==0.4.16 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html && \
+pip install flax==0.6.11 optax==0.1.7 jaxopt==0.8.1 brax==0.9.2 chex==0.1.8
+
+# Install Python packages from requirements.txt
+COPY docs/requirements.txt /home/duser/requirements.txt
+
+
+RUN pip install -r /home/duser/requirements.txt
+
 # Create and configure a non-root user
 ARG UID
 RUN useradd -u $UID --create-home duser && \
@@ -54,8 +62,7 @@ RUN useradd -u $UID --create-home duser && \
 # Switch to non-root user
 USER duser
 
-# Install Python packages from requirements.txt
-RUN pip install -r /home/duser/requirements.txt
+
 
 # Add alias for ipython
 RUN echo "alias i='/usr/local/bin/ipython'" >> ~/.bashrc
