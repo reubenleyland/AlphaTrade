@@ -91,6 +91,7 @@ if __name__ == "__main__":
     state_best_ask = np.zeros((test_steps, 1), dtype=int)
     state_best_bid = np.zeros((test_steps, 1), dtype=int)
     averageMidprice = np.zeros((test_steps, 1), dtype=int)
+    midprice=np.zeros((test_steps, 1), dtype=int)
     average_best_bid =np.zeros((test_steps, 1), dtype=int)
     average_best_ask =np.zeros((test_steps, 1), dtype=int)
     inventory_pnl = np.zeros((test_steps, 1), dtype=int)    
@@ -133,6 +134,7 @@ if __name__ == "__main__":
         total_PnL[i] = info["total_PnL"]
         buyQuant[i] = info["buyQuant"]
         sellQuant[i] = info["sellQuant"]
+        midprice[i]=state.mid_price
         #agr_bid_price[i] = info["action_prices"][0]  
         bid_price[i] = info["action_prices"][0]  # Store best ask
         #bid_price_PP[i] = info["action_prices"][2]
@@ -157,23 +159,31 @@ if __name__ == "__main__":
     # Clip the arrays to remove trailing zeros
     # ============================
 
-    plot_until_step = valid_steps 
+    plot_until_step = valid_steps
 
-    rewards = rewards[:plot_until_step]
-    inventory = inventory[:plot_until_step]
-    total_PnL = total_PnL[:plot_until_step] 
-    buyQuant = buyQuant[:plot_until_step]
-    sellQuant = sellQuant[:plot_until_step]
-    bid_price = bid_price[:plot_until_step]
-    #agr_bid_price = agr_bid_price[:plot_until_step]
-    #agr_ask_price = agr_ask_price[:plot_until_step]
-    ask_price = ask_price[:plot_until_step]
-    averageMidprice = averageMidprice[:plot_until_step]
-    average_best_bid =average_best_bid[:plot_until_step]
-    average_best_ask =average_best_ask[:plot_until_step]
-    inventory_pnl = inventory_pnl[:plot_until_step]
-    realized_pnl = realized_pnl[:plot_until_step]
-    unrealized_pnl = unrealized_pnl[:plot_until_step]
+    # Ensure that the slicing is correct
+    start_step = plot_until_step - 200
+    end_step = plot_until_step
+
+    # Create the x-axis for plotting
+    x_axis = np.arange(start_step, end_step)
+
+    # Slice the last 500 steps from each array
+    rewards = rewards[start_step:end_step]
+    midprice=midprice[start_step:end_step]
+    inventory = inventory[start_step:end_step]
+    total_PnL = total_PnL[start_step:end_step]
+    buyQuant = buyQuant[start_step:end_step]
+    sellQuant = sellQuant[start_step:end_step]
+    bid_price = bid_price[start_step:end_step]
+    ask_price = ask_price[start_step:end_step]
+    averageMidprice = averageMidprice[start_step:end_step]
+    average_best_bid = average_best_bid[start_step:end_step]
+    average_best_ask = average_best_ask[start_step:end_step]
+    inventory_pnl = inventory_pnl[start_step:end_step]
+    realized_pnl = realized_pnl[start_step:end_step]
+    unrealized_pnl = unrealized_pnl[start_step:end_step]
+
     #bid_price_PP =  bid_price_PP[:plot_until_step]
     #ask_price_PP =  ask_price_PP[:plot_until_step]
     #state_best_bid = state_best_bid[:valid_steps-1]
@@ -203,65 +213,66 @@ if __name__ == "__main__":
     # Plotting all metrics on one page
     # ============================
     # Create a figure with subplots (3 rows and 3 columns to fit the new data)
-    fig, axes = plt.subplots(3, 3, figsize=(15, 15))  # Adjust the grid as needed
+ 
 
     
 
+    # Adjust figure size for better spacing
+    fig, axes = plt.subplots(3, 3, figsize=(18, 12))  # Larger figure size for better readability
+
+    # Ensure the range of x-axis is correct for the sliced data
+    x_axis = range(start_step, end_step)  # Adjusting range to match last 500 steps
+
     # Plot each metric on a separate subplot
-    axes[0, 0].plot(range(plot_until_step), rewards, label="Reward", color='blue')
+    axes[0, 0].plot(x_axis, rewards, label="Reward", color='blue')
     axes[0, 0].set_xlabel("Steps")
     axes[0, 0].set_ylabel("Reward")
     axes[0, 0].set_title("Rewards Over Steps")
-    
-    axes[0, 1].plot(range(plot_until_step), inventory, label="Inventory", color='green')
+
+    axes[0, 1].plot(x_axis, inventory, label="Inventory", color='green')
     axes[0, 1].set_xlabel("Steps")
     axes[0, 1].set_ylabel("Inventory")
     axes[0, 1].set_title("Inventory Over Steps")
-    
-    axes[0, 2].plot(range(plot_until_step), total_PnL, label="Total PnL", color='orange')
+
+    axes[0, 2].plot(x_axis, total_PnL, label="Total PnL", color='orange')
     axes[0, 2].set_xlabel("Steps")
     axes[0, 2].set_ylabel("Total PnL")
     axes[0, 2].set_title("Total PnL Over Steps")
-    
-    axes[1, 0].plot(range(plot_until_step), buyQuant, label="Buy Quantity", color='red')
+
+    axes[1, 0].plot(x_axis, buyQuant, label="Buy Quantity", color='red')
     axes[1, 0].set_xlabel("Steps")
     axes[1, 0].set_ylabel("Buy Quantity")
     axes[1, 0].set_title("Buy Quantity Over Steps")
-    
-    axes[1, 1].plot(range(plot_until_step), sellQuant, label="Sell Quantity", color='purple')
+
+    axes[1, 1].plot(x_axis, sellQuant, label="Sell Quantity", color='purple')
     axes[1, 1].set_xlabel("Steps")
     axes[1, 1].set_ylabel("Sell Quantity")
     axes[1, 1].set_title("Sell Quantity Over Steps")
-    
+
     # Combined plot for Bid Price, Ask Price, and Average Mid Price
-    axes[1, 2].plot(range(plot_until_step), bid_price, label="Bid Price", color='pink')
-    axes[1, 2].plot(range(plot_until_step), ask_price, label="Ask Price", color='cyan')
-    axes[1, 2].plot(range(plot_until_step), averageMidprice, label="Average Mid Price", color='magenta')
-   # axes[1, 2].plot(range(plot_until_step), average_best_bid, label="Average Best Bid", color='red')
-   # axes[1, 2].plot(range(plot_until_step), average_best_ask, label="Average Best Ask", color='blue')
-    #axes[1, 2].plot(range(plot_until_step), bid_price_PP, label="Bid Price PP", color='orange')
-    #axes[1, 2].plot(range(plot_until_step), ask_price_PP, label="Ask Price PP", color='green')
-    #axes[1, 2].plot(range(plot_until_step), agr_bid_price, label="Bid Price Agr", color='yellow')
-    #axes[1, 2].plot(range(plot_until_step), agr_ask_price, label="Ask Price Agr", color='black')
+    axes[1, 2].plot(x_axis, bid_price, label="Bid Price", color='pink')
+    axes[1, 2].plot(x_axis, ask_price, label="Ask Price", color='cyan')
+    axes[1, 2].plot(x_axis, midprice, label="midprice", color='magenta')
     axes[1, 2].set_xlabel("Steps")
     axes[1, 2].set_ylabel("Price")
-    axes[1, 2].set_title("Bid, Ask, Mid,Agr, and PP Prices Over Steps")
+    axes[1, 2].set_title("Bid, Ask, and Mid Prices Over Steps")
     axes[1, 2].legend()
 
-    axes[2, 0].plot(range(plot_until_step), inventory_pnl, label="Inventory PnL", color='gold')
+    axes[2, 0].plot(x_axis, inventory_pnl, label="Inventory PnL", color='gold')
     axes[2, 0].set_xlabel("Steps")
     axes[2, 0].set_ylabel("Inventory PnL")
     axes[2, 0].set_title("Inventory PnL Over Steps")
 
-    axes[2, 1].plot(range(plot_until_step), realized_pnl, label="Realized PnL", color='orange')
+    axes[2, 1].plot(x_axis, realized_pnl, label="Realized PnL", color='orange')
     axes[2, 1].set_xlabel("Steps")
     axes[2, 1].set_ylabel("Realized PnL")
     axes[2, 1].set_title("Realized PnL Over Steps")
 
-    axes[2, 2].plot(range(plot_until_step), unrealized_pnl, label="Unrealized PnL", color='purple')
+    axes[2, 2].plot(x_axis, unrealized_pnl, label="Unrealized PnL", color='purple')
     axes[2, 2].set_xlabel("Steps")
     axes[2, 2].set_ylabel("Unrealized PnL")
     axes[2, 2].set_title("Unrealized PnL Over Steps")
+
 
     # Adjust layout to prevent overlapping
     plt.tight_layout()

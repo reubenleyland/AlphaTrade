@@ -219,7 +219,7 @@ class ExecutionEnv(BaseLOBEnv):
         action = self._reshape_action(input_action, state, params,key)
         action_msgs = self._getActionMsgs(action, state, params)
         action_prices = action_msgs[:, 3]
-        # jax.debug.print('action_msgs\n {}', action_msgs)
+        #jax.debug.print('action_msgs\n {}', action_msgs)
 
         raw_order_side = jax.lax.cond(
             state.is_sell_task,
@@ -1242,8 +1242,12 @@ if __name__ == "__main__":
         print("-"*20)
         key_policy, _ = jax.random.split(key_policy, 2)
         key_step, _ = jax.random.split(key_step, 2)
+        key_policy, _ = jax.random.split(key_policy, 2)
+        
+        test_action = jnp.array([1,0])
+        
         # test_action=env.action_space().sample(key_policy)
-        test_action = env.action_space().sample(key_policy) // 10
+        #test_action = env.action_space().sample(key_policy) // 10
         # test_action = jnp.array([100, 10])
         print(f"Sampled {i}th actions are: ", test_action)
         start=time.time()
